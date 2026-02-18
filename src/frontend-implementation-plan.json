@@ -1,104 +1,131 @@
 {
   "kind": "implementation_plan",
   "version": "1.0",
-  "title": "Trade Setup Analyzer — Live Market Data Fetch + Auto-Derived Trade Inputs",
+  "title": "Frontend rate-limit mitigation for live market data (cache, dedupe, spacing, backoff)",
   "requirements": [
     {
-      "id": "REQ-8",
-      "summary": "Fetch live/recent market price series for a user-entered ticker from a single configurable HTTP base URL and show loading, latest/last-close price, and timestamp with robust error handling.",
+      "id": "REQ-12",
+      "summary": "Add client-side TTL caching for successful live market-data results keyed by normalized ticker.",
       "acceptanceCriteria": [
-        "When a user enters a ticker and triggers data fetch, the UI shows a loading state and then displays fetched live/latest price and a timestamp (or clearly indicates when only last-close data is available).",
-        "If the ticker is invalid or the market-data request fails, the UI shows a clear error message in English and does not overwrite existing user-entered values.",
-        "The market-data provider endpoint used by the app is clearly indicated in code as a single configurable base URL (not scattered across components)."
+        "When the user clicks “Fetch Live Data” multiple times for the same ticker within the cache TTL, only the first click performs a network request; subsequent clicks return cached data.",
+        "Cached entries are keyed at least by normalized ticker symbol (trimmed + uppercased) and include a stored fetch timestamp.",
+        "The cache TTL is configurable in code (a single constant) and defaults to a sensible short duration (e.g., ~60 seconds) to reduce rate-limit hits while still allowing refreshes.",
+        "Cache behavior does not break existing derived-input auto-population or analysis flow."
       ],
       "file_operations": [
         {
-          "path": "frontend/src/lib/marketData/config.ts",
+          "path": "frontend/src/lib/marketData/marketDataPolicy.ts",
           "operation": "create",
-          "description": "Add a single configurable market-data HTTP base URL constant (and provider label) to ensure the provider configuration is centralized (not scattered)."
+          "description": "Create centralized client policy constants for market-data fetching, including a single CACHE_TTL_MS constant (default ~60s) and shared helper(s) for ticker normalization."
         },
         {
-          "path": "frontend/src/lib/marketData/types.ts",
+          "path": "frontend/src/lib/marketData/marketDataClient.ts",
           "operation": "create",
-          "description": "Define minimal frontend types for fetched market data (series points, latest/last-close price, timestamps, and provider metadata) to support UI display and downstream derivations."
+          "description": "Implement a client-side wrapper around existing fetch logic that maintains an in-memory cache of last successful MarketDataResult per normalized ticker, storing both result and fetch timestamp, and returns cached results within CACHE_TTL_MS."
+        },
+        {
+          "path": "frontend/src/hooks/useMarketData.ts",
+          "operation": "modify",
+          "description": "Switch hook to call the new marketDataClient wrapper so repeated fetches for the same normalized ticker reuse cached successful data within TTL while preserving current state transitions (success triggers derived-input auto-population in App)."
+        }
+      ]
+    },
+    {
+      "id": "REQ-13",
+      "summary": "Prevent overlapping and burst live market-data requests with in-flight de-duplication and per-ticker minimum spacing.",
+      "acceptanceCriteria": [
+        "If a fetch for a ticker is already in-flight, additional fetch attempts while loading do not create a second network request (they either await the same promise or no-op).",
+        "The app enforces a minimum interval between actual network calls per ticker (separate from caching), preventing rapid consecutive requests from the UI from generating bursts.",
+        "The UI “Fetch Live Data” and “Refresh” controls remain disabled while a request is in-flight, as they are today, and the underlying logic also prevents duplicate calls."
+      ],
+      "file_operations": [
+        {
+          "path": "frontend/src/lib/marketData/marketDataPolicy.ts",
+          "operation": "modify",
+          "description": "Add a single MIN_REQUEST_INTERVAL_MS constant (distinct from cache TTL) and any related policy constants needed to enforce per-ticker request spacing."
+        },
+        {
+          "path": "frontend/src/lib/marketData/marketDataClient.ts",
+          "operation": "modify",
+          "description": "Add per-ticker in-flight promise de-duplication so concurrent calls for the same normalized ticker share the same promise, and enforce MIN_REQUEST_INTERVAL_MS between actual network calls per ticker (queue/delay or otherwise prevent bursts without spawning multiple calls)."
+        },
+        {
+          "path": "frontend/src/hooks/useMarketData.ts",
+          "operation": "modify",
+          "description": "Ensure fetchData leverages the marketDataClient’s de-duplication/spacing and exposes loading state accurately so UI controls remain disabled during in-flight requests, while also preventing duplicates even if UI state changes."
+        },
+        {
+          "path": "frontend/src/App.tsx",
+          "operation": "modify",
+          "description": "Wire updated hook state into the Analyzer UI so “Fetch Live Data” and “Refresh” remain disabled during in-flight operations (and later during cooldown), without changing the existing derived-input and analysis flows."
+        }
+      ]
+    },
+    {
+      "id": "REQ-14",
+      "summary": "Automatically retry rate-limited market-data responses with exponential backoff and show a user-visible cooldown with next retry time.",
+      "acceptanceCriteria": [
+        "When the provider indicates a rate limit was reached, the app schedules an automatic retry using exponential backoff (with a maximum retry count and maximum delay).",
+        "During the backoff/cooldown window, the UI displays an English message indicating the app is waiting to retry (e.g., “Rate limit reached. Retrying in 20s…”).",
+        "Manual refresh/fetch controls are disabled during the cooldown window to prevent additional rate-limit hits, and re-enabled after success or after retries are exhausted.",
+        "If retries are exhausted, the app shows an English error message that explains the rate limit and suggests waiting or trying again later; it does not get stuck in a loading state."
+      ],
+      "file_operations": [
+        {
+          "path": "frontend/src/lib/marketData/marketDataPolicy.ts",
+          "operation": "modify",
+          "description": "Add exponential backoff policy constants (e.g., MAX_RETRIES, BASE_DELAY_MS, MAX_DELAY_MS) to keep retry behavior configurable in code."
+        },
+        {
+          "path": "frontend/src/lib/marketData/marketDataClient.ts",
+          "operation": "modify",
+          "description": "Detect typed rate-limit responses and implement automatic retry scheduling with exponential backoff, tracking cooldown state (next retry time, attempt count) and ensuring retries stop after MAX_RETRIES/maximum delay with a final explanatory English error."
+        },
+        {
+          "path": "frontend/src/hooks/useMarketData.ts",
+          "operation": "modify",
+          "description": "Extend hook state to represent a cooldown/backoff window (e.g., status 'cooldown' and a nextRetryAt/secondsRemaining field), disable manual fetch/refresh during cooldown, and ensure state resets cleanly after success or after retries are exhausted (no stuck loading)."
+        },
+        {
+          "path": "frontend/src/App.tsx",
+          "operation": "modify",
+          "description": "Update the Live Data Status Panel to render a clear English cooldown message including seconds until next retry (e.g., “Rate limit reached. Retrying in 20s…”), and disable “Fetch Live Data”/“Refresh” while cooldown is active, re-enabling after success or exhaustion."
+        }
+      ]
+    },
+    {
+      "id": "REQ-15",
+      "summary": "Introduce typed market-data errors so the UI can distinguish rate-limit conditions from other failures without breaking existing call sites.",
+      "acceptanceCriteria": [
+        "Market-data error results include a machine-readable indicator for rate-limited responses (e.g., a boolean flag or an error code) without breaking existing call sites.",
+        "Non-rate-limit errors continue to show the current error UI, but rate-limit errors use the new cooldown/retry UX and messaging.",
+        "Invalid ticker handling remains unchanged (still shows an immediate validation-style error without retry/backoff)."
+      ],
+      "file_operations": [
+        {
+          "path": "frontend/src/lib/marketData/types.ts",
+          "operation": "modify",
+          "description": "Extend MarketDataError typing with a machine-readable discriminator (e.g., errorCode and/or isRateLimited boolean), while keeping compatibility with existing checks like 'error' in result and preserving the existing error string for UI display."
         },
         {
           "path": "frontend/src/lib/marketData/fetchMarketData.ts",
-          "operation": "create",
-          "description": "Implement a market-data fetch helper that reads the base URL from frontend/src/lib/marketData/config.ts, validates the ticker input, fetches a recent price series, and returns a normalized result including latest price and a timestamp (or a clear last-close-only indication)."
+          "operation": "modify",
+          "description": "Update provider response parsing so Alpha Vantage rate-limit signals (e.g., 'Note'/'Information') return a typed rate-limit error, invalid ticker remains a typed invalid-ticker error (no retries), and other failures map to appropriate typed error categories."
         },
         {
-          "path": "frontend/src/App.tsx",
+          "path": "frontend/src/lib/marketData/marketDataClient.ts",
           "operation": "modify",
-          "description": "Wire a 'Fetch Live Data' control near the ticker input, display loading and error states in English, and show fetched latest/last-close price plus a timestamp without overwriting existing manually-entered entry/stop/take-profit values on fetch failure."
-        }
-      ]
-    },
-    {
-      "id": "REQ-9",
-      "summary": "Compute support/resistance (recent swing low/high) from fetched series using existing indicator logic and auto-populate Entry/Stop/Take-Profit fields with editable, clearly labeled derived values.",
-      "acceptanceCriteria": [
-        "After successful live-data fetch, the app auto-fills Entry Price, Stop Loss, and Take Profit with derived values (and keeps Ticker filled).",
-        "Auto-filled values are clearly labeled as derived from live market data and remain editable (user can override).",
-        "Derived levels are computed from the fetched series (not from placeholder constants) and are consistent with the existing indicator logic (e.g., using recent min/max over a lookback window)."
-      ],
-      "file_operations": [
-        {
-          "path": "frontend/src/lib/indicators.ts",
-          "operation": "modify",
-          "description": "Extend indicator utilities to support computing support/resistance from market-data series (including close-only points when OHLC is partial) using the existing recent min/max lookback approach."
+          "description": "Use the new typed error indicator to trigger cooldown/backoff only for rate-limit errors; ensure invalid ticker and other error categories bypass retry/backoff and preserve current immediate error behavior."
         },
-        {
-          "path": "frontend/src/lib/marketData/deriveTradeInputs.ts",
-          "operation": "create",
-          "description": "Add a helper that converts normalized fetched series + computed indicators into derived trade input defaults (entry/stop/take-profit) using latest/last-close price plus recent support/resistance, returning values suitable for auto-filling while keeping them user-editable."
-        },
-        {
-          "path": "frontend/src/App.tsx",
-          "operation": "modify",
-          "description": "After successful fetch, compute derived levels from the fetched series and auto-fill Entry/Stop/Take-Profit fields; add UI labeling indicating values are derived from live market data while allowing user overrides."
-        }
-      ]
-    },
-    {
-      "id": "REQ-10",
-      "summary": "Update the analyze flow to default to live-derived (or user-overridden) inputs, guide users to fetch live data when missing, and keep results + History behavior unchanged.",
-      "acceptanceCriteria": [
-        "If live data has been fetched, clicking “Analyze Trade Setup” runs analysis using the current values shown in the input fields (derived by default, overridden if the user edited them).",
-        "If live data has not been fetched yet, the UI guides the user to fetch live data (or otherwise provides a clear path to proceed) rather than silently analyzing with empty/invalid values.",
-        "Successful analysis still saves to per-user history and the History tab continues to load past analyses without errors."
-      ],
-      "file_operations": [
-        {
-          "path": "frontend/src/App.tsx",
-          "operation": "modify",
-          "description": "Adjust 'Analyze Trade Setup' action gating and messaging: if live data is not fetched and required numeric fields are missing/invalid, show a clear English prompt to fetch live data (or fill fields manually), and ensure analysis uses the current form values shown (derived by default, overridden if edited)."
-        },
-        {
-          "path": "frontend/src/hooks/useTradeAnalysis.ts",
-          "operation": "modify",
-          "description": "Ensure the analysis mutation continues to accept the current form values without introducing coupling to market-data state, so results UI and History refresh behavior remain unchanged."
-        }
-      ]
-    },
-    {
-      "id": "REQ-11",
-      "summary": "Add a live-data status panel in the Analyzer tab showing data source, last refresh time, status state, and a Refresh control that preserves risk amount.",
-      "acceptanceCriteria": [
-        "The status panel is visible when a ticker is present and indicates one of: not fetched yet / loading / fetched successfully / error.",
-        "“Refresh Data” re-runs the fetch and updates derived values while preserving the user’s risk amount input.",
-        "User-facing strings are in English and consistent with the app’s existing tone."
-      ],
-      "file_operations": [
         {
           "path": "frontend/src/hooks/useMarketData.ts",
-          "operation": "create",
-          "description": "Create a dedicated hook to manage market-data fetch state (not fetched / loading / success / error), last refresh timestamp, and refetch behavior for the currently entered ticker."
+          "operation": "modify",
+          "description": "Update hook error handling to branch on typed errors: rate-limit errors drive cooldown/retry UX; non-rate-limit errors keep current error UI; invalid ticker remains immediate with no backoff."
         },
         {
           "path": "frontend/src/App.tsx",
           "operation": "modify",
-          "description": "Add a compact live-data status panel in the Analyzer tab (visible when ticker is present) showing provider label, status, and last refresh time, plus a 'Refresh Data' control that refetches and updates derived Entry/Stop/Take-Profit while preserving the current Risk Amount input."
+          "description": "Adjust rendering to ensure rate-limit errors are displayed via the new cooldown/retry messaging path, while non-rate-limit errors continue using the existing destructive alert; keep invalid ticker validation-style behavior unchanged."
         }
       ]
     }

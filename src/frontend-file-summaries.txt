@@ -1,5 +1,5 @@
 {
-  "frontend/src/App.tsx": "Main application component with tabbed interface, live market data fetching, auto-populated trade parameters from live data, manual override capability, and comprehensive status display.",
+  "frontend/src/App.tsx": "Main application component with tabbed interface, live market data fetching with rate-limit handling, cooldown UI display, auto-populated trade parameters from live data or CSV upload, and comprehensive status indicators showing only available technical indicators.",
   "frontend/src/hooks/useQueries.ts": "Empty placeholder file for organizing React Query hooks (actual hooks are in feature-specific files).",
   "frontend/src/hooks/useUserProfile.ts": "React Query hooks for fetching and saving user profiles with proper actor dependency handling to prevent modal flash.",
   "frontend/src/hooks/useTradeAnalysis.ts": "React Query mutation hook for analyzing trades via backend with automatic history invalidation on success.",
@@ -18,8 +18,10 @@
   "frontend/src/index.css": "Global styles with dark trading-themed OKLCH color system optimized for financial data visualization.",
   "frontend/tailwind.config.js": "Tailwind configuration with custom color tokens, Inter/JetBrains Mono fonts, and extended theme for trading tool aesthetic.",
   "frontend/src/lib/marketData/config.ts": "Centralized configuration for Alpha Vantage market data API including base URL, provider name, demo API key, and rate limit documentation.",
-  "frontend/src/lib/marketData/types.ts": "TypeScript interfaces for market data structures including price points, fetch results, and error types used throughout the market data flow.",
-  "frontend/src/lib/marketData/fetchMarketData.ts": "Market data fetch helper that queries Alpha Vantage API for intraday/daily stock prices with comprehensive error handling and fallback logic.",
+  "frontend/src/lib/marketData/types.ts": "TypeScript interfaces for market data structures with extended error typing including errorCode and isRateLimited discriminators for proper error handling and retry logic.",
+  "frontend/src/lib/marketData/fetchMarketData.ts": "Market data fetch helper that queries Alpha Vantage API with comprehensive error handling and typed error responses including rate-limit detection for both intraday and daily data endpoints.",
   "frontend/src/lib/marketData/deriveTradeInputs.ts": "Utility function that computes suggested entry/stop/take-profit levels from fetched market data and technical indicators using support/resistance.",
-  "frontend/src/hooks/useMarketData.ts": "React hook managing market data fetch state (idle/loading/success/error), last refresh timestamp, and refetch behavior for live stock data with proper null handling for error property."
+  "frontend/src/hooks/useMarketData.ts": "React hook managing market data fetch state with cooldown status, automatic retry scheduling, countdown timer display, proper type guards for error discrimination, and cleanup of intervals and retry state.",
+  "frontend/src/lib/marketData/marketDataPolicy.ts": "Centralized policy constants for market data fetching including cache TTL, request spacing, exponential backoff parameters, and helper functions for ticker normalization and backoff delay calculation.",
+  "frontend/src/lib/marketData/marketDataClient.ts": "Client-side wrapper implementing TTL caching, in-flight de-duplication, per-ticker request spacing, and automatic exponential backoff retry scheduling with proper type guards for rate-limited responses."
 }

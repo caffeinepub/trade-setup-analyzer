@@ -2,12 +2,78 @@
   "kind": "feature_evidence_report",
   "features": [
     {
-      "featureId": "feature-add-live-market-data-fetching-for-a-user-entered-ticker-symbol-so-the-app-can-retrieve-recent-price-history-and-a-latest-price-when-available-from-an-external-market-data-http-endpoint-without-requiring-the-user-to-manually-type-current-price-swing-levels",
-      "featureTitle": "Add live market data fetching for a user-entered ticker symbol so the app can retrieve recent price history and a latest price (when available) from an external market-data HTTP endpoint, without requiring the user to manually type current price / swing levels.",
+      "featureId": "feature-add-client-side-caching-for-live-market-data-fetches-so-repeated-requests-for-the-same-ticker-within-a-short-time-window-reuse-the-last-successful-result-instead-of-calling-the-external-api-again",
+      "featureTitle": "Add client-side caching for live market-data fetches so repeated requests for the same ticker within a short time window reuse the last successful result instead of calling the external API again.",
+      "files": [
+        "frontend/src/hooks/useMarketData.ts",
+        "frontend/src/lib/marketData/marketDataClient.ts",
+        "frontend/src/lib/marketData/marketDataPolicy.ts"
+      ],
+      "components": [
+        "authorization@4.0.0",
+        "core-infrastructure@1.0.2",
+        "shadcn-ui@1.0.0",
+        "build-template-react@1.0.0",
+        "initial-app@1.0.0",
+        "github-export-icp-cli@1.0.0"
+      ],
+      "testIds": [
+        "REQ-12"
+      ],
+      "confidence": "high"
+    },
+    {
+      "featureId": "feature-implement-request-de-duplication-and-minimum-request-spacing-for-live-market-data-fetches-so-the-app-cannot-trigger-multiple-overlapping-calls-or-burst-requests-that-exceed-the-provider-s-per-minute-limit",
+      "featureTitle": "Implement request de-duplication and minimum request spacing for live market-data fetches so the app cannot trigger multiple overlapping calls or burst requests that exceed the provider’s per-minute limit.",
       "files": [
         "frontend/src/App.tsx",
-        "frontend/src/lib/marketData/config.ts",
+        "frontend/src/hooks/useMarketData.ts",
+        "frontend/src/lib/marketData/marketDataClient.ts",
+        "frontend/src/lib/marketData/marketDataPolicy.ts"
+      ],
+      "components": [
+        "authorization@4.0.0",
+        "core-infrastructure@1.0.2",
+        "shadcn-ui@1.0.0",
+        "build-template-react@1.0.0",
+        "initial-app@1.0.0",
+        "github-export-icp-cli@1.0.0"
+      ],
+      "testIds": [
+        "REQ-13"
+      ],
+      "confidence": "high"
+    },
+    {
+      "featureId": "feature-add-automatic-retry-with-exponential-backoff-when-the-market-data-provider-responds-with-a-rate-limit-response-e-g-alpha-vantage-note-information-and-expose-a-clear-user-facing-cooldown-state-indicating-when-the-next-retry-will-occur",
+      "featureTitle": "Add automatic retry with exponential backoff when the market-data provider responds with a rate-limit response (e.g., Alpha Vantage 'Note'/'Information') and expose a clear, user-facing cooldown state indicating when the next retry will occur.",
+      "files": [
+        "frontend/src/App.tsx",
+        "frontend/src/hooks/useMarketData.ts",
+        "frontend/src/lib/marketData/marketDataClient.ts",
+        "frontend/src/lib/marketData/marketDataPolicy.ts"
+      ],
+      "components": [
+        "authorization@4.0.0",
+        "core-infrastructure@1.0.2",
+        "shadcn-ui@1.0.0",
+        "build-template-react@1.0.0",
+        "initial-app@1.0.0",
+        "github-export-icp-cli@1.0.0"
+      ],
+      "testIds": [
+        "REQ-14"
+      ],
+      "confidence": "high"
+    },
+    {
+      "featureId": "feature-improve-market-data-error-typing-so-the-ui-can-distinguish-rate-limit-errors-from-other-errors-invalid-ticker-network-error-no-data-and-render-more-specific-guidance",
+      "featureTitle": "Improve market-data error typing so the UI can distinguish rate-limit errors from other errors (invalid ticker, network error, no data) and render more specific guidance.",
+      "files": [
+        "frontend/src/App.tsx",
+        "frontend/src/hooks/useMarketData.ts",
         "frontend/src/lib/marketData/fetchMarketData.ts",
+        "frontend/src/lib/marketData/marketDataClient.ts",
         "frontend/src/lib/marketData/types.ts"
       ],
       "components": [
@@ -19,68 +85,7 @@
         "github-export-icp-cli@1.0.0"
       ],
       "testIds": [
-        "REQ-8"
-      ],
-      "confidence": "high"
-    },
-    {
-      "featureId": "feature-derive-analysis-inputs-automatically-from-the-fetched-live-market-data-compute-recent-support-resistance-or-recent-swing-low-high-from-the-fetched-ohlc-close-series-using-the-existing-indicator-computation-approach-and-use-those-derived-values-to-auto-populate-the-trade-parameter-fields-entry-stop-take-profit-so-the-user-is-no-longer-required-to-supply-these-numbers-manually",
-      "featureTitle": "Derive analysis inputs automatically from the fetched live market data: compute recent support/resistance (or recent swing low/high) from the fetched OHLC/close series using the existing indicator computation approach, and use those derived values to auto-populate the trade parameter fields (entry/stop/take-profit) so the user is no longer required to supply these numbers manually.",
-      "files": [
-        "frontend/src/App.tsx",
-        "frontend/src/lib/indicators.ts",
-        "frontend/src/lib/marketData/deriveTradeInputs.ts"
-      ],
-      "components": [
-        "authorization@4.0.0",
-        "core-infrastructure@1.0.2",
-        "shadcn-ui@1.0.0",
-        "build-template-react@1.0.0",
-        "initial-app@1.0.0",
-        "github-export-icp-cli@1.0.0"
-      ],
-      "testIds": [
-        "REQ-9"
-      ],
-      "confidence": "high"
-    },
-    {
-      "featureId": "feature-update-the-analyze-flow-so-the-primary-action-uses-the-live-data-derived-inputs-by-default-running-an-analysis-after-a-successful-live-data-fetch-should-send-the-derived-or-user-overridden-entry-stop-take-profit-values-and-the-user-entered-risk-amount-to-the-existing-backend-analysis-endpoint-and-the-results-ui-should-continue-to-work-unchanged",
-      "featureTitle": "Update the analyze flow so the primary action uses the live-data-derived inputs by default: running an analysis after a successful live-data fetch should send the derived (or user-overridden) entry/stop/take-profit values and the user-entered risk amount to the existing backend analysis endpoint, and the results UI should continue to work unchanged.",
-      "files": [
-        "frontend/src/App.tsx",
-        "frontend/src/hooks/useTradeAnalysis.ts"
-      ],
-      "components": [
-        "authorization@4.0.0",
-        "core-infrastructure@1.0.2",
-        "shadcn-ui@1.0.0",
-        "build-template-react@1.0.0",
-        "initial-app@1.0.0",
-        "github-export-icp-cli@1.0.0"
-      ],
-      "testIds": [
-        "REQ-10"
-      ],
-      "confidence": "high"
-    },
-    {
-      "featureId": "feature-add-a-small-live-data-status-panel-in-the-analyzer-tab-that-shows-data-source-label-last-refresh-time-and-a-manual-refresh-data-control-to-re-fetch-live-market-data-for-the-currently-entered-ticker",
-      "featureTitle": "Add a small live-data status panel in the Analyzer tab that shows: data source label, last refresh time, and a manual “Refresh Data” control to re-fetch live market data for the currently entered ticker.",
-      "files": [
-        "frontend/src/App.tsx",
-        "frontend/src/hooks/useMarketData.ts"
-      ],
-      "components": [
-        "authorization@4.0.0",
-        "core-infrastructure@1.0.2",
-        "shadcn-ui@1.0.0",
-        "build-template-react@1.0.0",
-        "initial-app@1.0.0",
-        "github-export-icp-cli@1.0.0"
-      ],
-      "testIds": [
-        "REQ-11"
+        "REQ-15"
       ],
       "confidence": "high"
     }

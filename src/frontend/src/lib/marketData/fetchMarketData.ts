@@ -14,6 +14,8 @@ export async function fetchMarketData(ticker: string): Promise<MarketDataResult 
       ticker: cleanTicker,
       error: 'Invalid ticker symbol. Please enter a valid stock symbol (e.g., AAPL, MSFT).',
       provider: MARKET_DATA_CONFIG.provider,
+      errorCode: 'invalid_ticker',
+      isRateLimited: false,
     };
   }
 
@@ -40,22 +42,29 @@ export async function fetchMarketData(ticker: string): Promise<MarketDataResult 
         ticker: cleanTicker,
         error: `Invalid ticker symbol "${cleanTicker}". Please verify the symbol is correct.`,
         provider: MARKET_DATA_CONFIG.provider,
+        errorCode: 'invalid_ticker',
+        isRateLimited: false,
       };
     }
 
+    // Rate limit detection
     if (data['Note']) {
       return {
         ticker: cleanTicker,
-        error: 'API rate limit reached. Please wait a moment and try again.',
+        error: 'API rate limit reached. Retrying automatically...',
         provider: MARKET_DATA_CONFIG.provider,
+        errorCode: 'rate_limit',
+        isRateLimited: true,
       };
     }
 
     if (data['Information']) {
       return {
         ticker: cleanTicker,
-        error: 'API rate limit reached. Please wait a moment and try again.',
+        error: 'API rate limit reached. Retrying automatically...',
         provider: MARKET_DATA_CONFIG.provider,
+        errorCode: 'rate_limit',
+        isRateLimited: true,
       };
     }
 
@@ -83,6 +92,8 @@ export async function fetchMarketData(ticker: string): Promise<MarketDataResult 
         ticker: cleanTicker,
         error: 'No price data available for this ticker.',
         provider: MARKET_DATA_CONFIG.provider,
+        errorCode: 'unknown',
+        isRateLimited: false,
       };
     }
 
@@ -103,6 +114,8 @@ export async function fetchMarketData(ticker: string): Promise<MarketDataResult 
       ticker: cleanTicker,
       error: error instanceof Error ? error.message : 'Failed to fetch market data. Please try again.',
       provider: MARKET_DATA_CONFIG.provider,
+      errorCode: 'network_error',
+      isRateLimited: false,
     };
   }
 }
@@ -123,11 +136,24 @@ async function fetchDailyData(ticker: string): Promise<MarketDataResult | Market
 
     const data = await response.json();
 
-    if (data['Error Message'] || data['Note'] || data['Information']) {
+    // Rate limit detection in daily fallback
+    if (data['Note'] || data['Information']) {
+      return {
+        ticker,
+        error: 'API rate limit reached. Retrying automatically...',
+        provider: MARKET_DATA_CONFIG.provider,
+        errorCode: 'rate_limit',
+        isRateLimited: true,
+      };
+    }
+
+    if (data['Error Message']) {
       return {
         ticker,
         error: 'Unable to fetch market data. Please verify the ticker symbol and try again.',
         provider: MARKET_DATA_CONFIG.provider,
+        errorCode: 'invalid_ticker',
+        isRateLimited: false,
       };
     }
 
@@ -137,6 +163,8 @@ async function fetchDailyData(ticker: string): Promise<MarketDataResult | Market
         ticker,
         error: 'No price data available for this ticker.',
         provider: MARKET_DATA_CONFIG.provider,
+        errorCode: 'unknown',
+        isRateLimited: false,
       };
     }
 
@@ -167,6 +195,8 @@ async function fetchDailyData(ticker: string): Promise<MarketDataResult | Market
       ticker,
       error: 'Failed to fetch daily market data. Please try again.',
       provider: MARKET_DATA_CONFIG.provider,
+      errorCode: 'network_error',
+      isRateLimited: false,
     };
   }
 }

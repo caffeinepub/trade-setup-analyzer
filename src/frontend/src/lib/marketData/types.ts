@@ -21,8 +21,12 @@ export interface MarketDataResult {
   error?: string;
 }
 
+export type MarketDataErrorCode = 'rate_limit' | 'invalid_ticker' | 'network_error' | 'unknown';
+
 export interface MarketDataError {
   ticker: string;
   error: string;
   provider: string;
+  errorCode: MarketDataErrorCode;
+  isRateLimited: boolean;
 }

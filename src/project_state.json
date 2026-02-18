@@ -1,12 +1,14 @@
 {
   "schemaVersion": "1.0.0",
-  "projectStateVersion": 5,
+  "projectStateVersion": 7,
   "summary": "Build an HTML5 web app where a user inputs a stock ticker/symbol and the app pulls live market data to analyze it and propose a trade setup (entry, stop loss, take profit) and potential earnings, rather than requiring the user to manually supply those values.",
   "architectural_notes": [
-    "Add live market-data integration (choose provider/API), including rate-limiting, error handling, and caching/fallback behavior when data is unavailable."
+    "Add live market-data integration (choose provider/API), including rate-limiting, error handling, and caching/fallback behavior when data is unavailable.",
+    "Implement rate-limit mitigation for the live market-data provider: client/server-side throttling or debouncing, response caching with TTL, and retry with exponential backoff + jitter on 429/limit responses."
   ],
   "known_issues": [
-    "Current UI requests manual analysis inputs (e.g., current price/swing levels), but user expectation is that the app derives these from the ticker via live data analysis."
+    "Current UI requests manual analysis inputs (e.g., current price/swing levels), but user expectation is that the app derives these from the ticker via live data analysis.",
+    "Live market-data API rate limit is being reached (provider blocks further requests temporarily), causing the app to fail fetching prices until the limit resets."
   ],
   "isFixRequest": true,
   "existing_features": [
@@ -89,6 +91,38 @@
         "REQ-11"
       ],
       "version": 1
+    },
+    {
+      "id": "feature-add-client-side-caching-for-live-market-data-fetches-so-repeated-requests-for-the-same-ticker-within-a-short-time-window-reuse-the-last-successful-result-instead-of-calling-the-external-api-again",
+      "title": "Add client-side caching for live market-data fetches so repeated requests for the same ticker within a short time window reuse the last successful result instead of calling the external API again.",
+      "reqIds": [
+        "REQ-12"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-implement-request-de-duplication-and-minimum-request-spacing-for-live-market-data-fetches-so-the-app-cannot-trigger-multiple-overlapping-calls-or-burst-requests-that-exceed-the-provider-s-per-minute-limit",
+      "title": "Implement request de-duplication and minimum request spacing for live market-data fetches so the app cannot trigger multiple overlapping calls or burst requests that exceed the provider’s per-minute limit.",
+      "reqIds": [
+        "REQ-13"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-add-automatic-retry-with-exponential-backoff-when-the-market-data-provider-responds-with-a-rate-limit-response-e-g-alpha-vantage-note-information-and-expose-a-clear-user-facing-cooldown-state-indicating-when-the-next-retry-will-occur",
+      "title": "Add automatic retry with exponential backoff when the market-data provider responds with a rate-limit response (e.g., Alpha Vantage 'Note'/'Information') and expose a clear, user-facing cooldown state indicating when the next retry will occur.",
+      "reqIds": [
+        "REQ-14"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-improve-market-data-error-typing-so-the-ui-can-distinguish-rate-limit-errors-from-other-errors-invalid-ticker-network-error-no-data-and-render-more-specific-guidance",
+      "title": "Improve market-data error typing so the UI can distinguish rate-limit errors from other errors (invalid ticker, network error, no data) and render more specific guidance.",
+      "reqIds": [
+        "REQ-15"
+      ],
+      "version": 1
     }
   ],
   "new_feature_requests": [
@@ -109,6 +143,12 @@
     {
       "id": "AR-4",
       "summary": "Fetch/analyze live stock price data from a user-entered ticker so the app can auto-populate analysis inputs (e.g., current price, recent swing high/low) instead of asking the user to enter them manually.",
+      "reqIds": [],
+      "status": "pending"
+    },
+    {
+      "id": "AR-5",
+      "summary": "Mitigate live market-data API rate limits by reducing request frequency, adding caching, and implementing automatic retry/backoff when limits are hit",
       "reqIds": [],
       "status": "pending"
     }

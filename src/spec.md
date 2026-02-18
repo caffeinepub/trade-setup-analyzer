@@ -1,13 +1,13 @@
 # Specification
 
 ## Summary
-**Goal:** Fetch live market data for a user-entered ticker, derive swing/support-resistance levels from that data, auto-populate trade inputs, and run analysis using those derived (or user-edited) values.
+**Goal:** Reduce live market-data API rate-limit errors by adding client-side caching, de-duplication, request spacing, and automatic retry with backoff plus clearer UI messaging.
 
 **Planned changes:**
-- Add a frontend live market-data fetch flow for a ticker symbol with loading, success (latest/last-close + timestamp), and error states, using a single configurable base URL for the provider endpoint.
-- Compute derived inputs (e.g., recent swing low/high or support/resistance from the fetched OHLC/close series) and auto-fill Entry Price, Stop Loss, and Take Profit while keeping values editable and labeled as derived from live data.
-- Update the Analyzer flow so “Analyze Trade Setup” uses the current field values (derived by default, user-overridden if edited) and guides the user to fetch data first when live data has not been retrieved.
-- Add a small live-data status panel in the Analyzer tab showing data source, last refresh time, current status (not fetched/loading/success/error), and a “Refresh Data” control that re-fetches and updates derived values while preserving the risk amount.
-- Ensure the existing analysis results UI and per-user history behavior continue working unchanged, with any necessary backend adjustments limited to the existing actor.
+- Add a client-side cache for live market-data responses keyed by normalized ticker (trim + uppercase), storing the last successful payload and fetch timestamp, with a configurable TTL constant (default ~60s).
+- Implement request de-duplication so repeated fetch attempts for the same ticker while a request is in-flight do not start additional network calls.
+- Enforce a minimum interval between actual network calls per ticker (separate from caching) to prevent burst requests from rapid UI interactions.
+- Detect provider rate-limit responses and automatically retry with exponential backoff (max retries + max delay), while showing a cooldown message with the next retry countdown and disabling fetch/refresh controls during cooldown.
+- Improve market-data error typing to distinguish rate-limit errors from other errors, preserving existing invalid-ticker handling and current UI for non-rate-limit errors.
 
-**User-visible outcome:** Users can enter a ticker, fetch live/latest (or last-close) market data with clear status/timestamps, see entry/stop/take-profit auto-filled from the fetched series (editable), refresh the data on demand, and run the existing trade analysis using those populated values while history continues to work.
+**User-visible outcome:** Fetching/refreshing live data for a ticker is less likely to hit API limits; repeated clicks reuse cached results, duplicate/burst calls are prevented, and if rate-limited the app shows a clear cooldown with automatic retries and actionable English error messages if retries fail.

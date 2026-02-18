@@ -1,96 +1,115 @@
 {
   "kind": "build_request",
-  "title": "Analyze ticker using live market data and auto-populate trade inputs",
+  "title": "Mitigate live market-data API rate limits with caching and automatic backoff",
   "projectName": "Trade Setup Analyzer",
   "priority": "normal",
   "requirements": [
     {
-      "id": "REQ-8",
-      "text": "Add live market data fetching for a user-entered ticker symbol so the app can retrieve recent price history and a latest price (when available) from an external market-data HTTP endpoint, without requiring the user to manually type current price / swing levels.",
+      "id": "REQ-12",
+      "text": "Add client-side caching for live market-data fetches so repeated requests for the same ticker within a short time window reuse the last successful result instead of calling the external API again.",
       "target": "frontend",
       "source": {
         "messageIds": [
-          "msg-7"
+          "msg-user-1",
+          "msg-user-2"
         ],
         "quotes": [
-          "YES, PLEASE...make sure it's analyzing live stock data"
+          "IT SAYS API LIMIT HAS BEEN REACHED",
+          "OK LETS TRY THAT OPTION"
         ]
       },
       "acceptanceCriteria": [
-        "When a user enters a ticker and triggers data fetch, the UI shows a loading state and then displays fetched live/latest price and a timestamp (or clearly indicates when only last-close data is available).",
-        "If the ticker is invalid or the market-data request fails, the UI shows a clear error message in English and does not overwrite existing user-entered values.",
-        "The market-data provider endpoint used by the app is clearly indicated in code as a single configurable base URL (not scattered across components)."
+        "When the user clicks “Fetch Live Data” multiple times for the same ticker within the cache TTL, only the first click performs a network request; subsequent clicks return cached data.",
+        "Cached entries are keyed at least by normalized ticker symbol (trimmed + uppercased) and include a stored fetch timestamp.",
+        "The cache TTL is configurable in code (a single constant) and defaults to a sensible short duration (e.g., ~60 seconds) to reduce rate-limit hits while still allowing refreshes.",
+        "Cache behavior does not break existing derived-input auto-population or analysis flow."
       ]
     },
     {
-      "id": "REQ-9",
-      "text": "Derive analysis inputs automatically from the fetched live market data: compute recent support/resistance (or recent swing low/high) from the fetched OHLC/close series using the existing indicator computation approach, and use those derived values to auto-populate the trade parameter fields (entry/stop/take-profit) so the user is no longer required to supply these numbers manually.",
+      "id": "REQ-13",
+      "text": "Implement request de-duplication and minimum request spacing for live market-data fetches so the app cannot trigger multiple overlapping calls or burst requests that exceed the provider’s per-minute limit.",
       "target": "frontend",
       "source": {
         "messageIds": [
-          "msg-4",
-          "msg-7"
+          "msg-user-1",
+          "msg-user-2"
         ],
         "quotes": [
-          "THIS IS ALL WRONG, THE INFO ITS ASKING ME FOR, THE APP IS SUPPOSE TO BE GIVING ME THAT INFO FROM ANALYZING THE STOCK THAT I INPUT",
-          "YES, PLEASE...make sure it's analyzing live stock data"
+          "IT SAYS API LIMIT HAS BEEN REACHED",
+          "OK LETS TRY THAT OPTION"
         ]
       },
       "acceptanceCriteria": [
-        "After successful live-data fetch, the app auto-fills Entry Price, Stop Loss, and Take Profit with derived values (and keeps Ticker filled).",
-        "Auto-filled values are clearly labeled as derived from live market data and remain editable (user can override).",
-        "Derived levels are computed from the fetched series (not from placeholder constants) and are consistent with the existing indicator logic (e.g., using recent min/max over a lookback window)."
+        "If a fetch for a ticker is already in-flight, additional fetch attempts while loading do not create a second network request (they either await the same promise or no-op).",
+        "The app enforces a minimum interval between actual network calls per ticker (separate from caching), preventing rapid consecutive requests from the UI from generating bursts.",
+        "The UI “Fetch Live Data” and “Refresh” controls remain disabled while a request is in-flight, as they are today, and the underlying logic also prevents duplicate calls."
       ]
     },
     {
-      "id": "REQ-10",
-      "text": "Update the analyze flow so the primary action uses the live-data-derived inputs by default: running an analysis after a successful live-data fetch should send the derived (or user-overridden) entry/stop/take-profit values and the user-entered risk amount to the existing backend analysis endpoint, and the results UI should continue to work unchanged.",
-      "target": "both",
-      "source": {
-        "messageIds": [
-          "msg-7"
-        ],
-        "quotes": [
-          "YES, PLEASE...make sure it's analyzing live stock data"
-        ]
-      },
-      "acceptanceCriteria": [
-        "If live data has been fetched, clicking “Analyze Trade Setup” runs analysis using the current values shown in the input fields (derived by default, overridden if the user edited them).",
-        "If live data has not been fetched yet, the UI guides the user to fetch live data (or otherwise provides a clear path to proceed) rather than silently analyzing with empty/invalid values.",
-        "Successful analysis still saves to per-user history and the History tab continues to load past analyses without errors."
-      ]
-    },
-    {
-      "id": "REQ-11",
-      "text": "Add a small live-data status panel in the Analyzer tab that shows: data source label, last refresh time, and a manual “Refresh Data” control to re-fetch live market data for the currently entered ticker.",
+      "id": "REQ-14",
+      "text": "Add automatic retry with exponential backoff when the market-data provider responds with a rate-limit response (e.g., Alpha Vantage 'Note'/'Information') and expose a clear, user-facing cooldown state indicating when the next retry will occur.",
       "target": "frontend",
       "source": {
         "messageIds": [
-          "msg-7"
+          "msg-user-1",
+          "msg-user-2"
         ],
         "quotes": [
-          "YES, PLEASE...make sure it's analyzing live stock data"
+          "IT SAYS API LIMIT HAS BEEN REACHED",
+          "OK LETS TRY THAT OPTION"
         ]
       },
       "acceptanceCriteria": [
-        "The status panel is visible when a ticker is present and indicates one of: not fetched yet / loading / fetched successfully / error.",
-        "“Refresh Data” re-runs the fetch and updates derived values while preserving the user’s risk amount input.",
-        "User-facing strings are in English and consistent with the app’s existing tone."
+        "When the provider indicates a rate limit was reached, the app schedules an automatic retry using exponential backoff (with a maximum retry count and maximum delay).",
+        "During the backoff/cooldown window, the UI displays an English message indicating the app is waiting to retry (e.g., “Rate limit reached. Retrying in 20s…”).",
+        "Manual refresh/fetch controls are disabled during the cooldown window to prevent additional rate-limit hits, and re-enabled after success or after retries are exhausted.",
+        "If retries are exhausted, the app shows an English error message that explains the rate limit and suggests waiting or trying again later; it does not get stuck in a loading state."
+      ]
+    },
+    {
+      "id": "REQ-15",
+      "text": "Improve market-data error typing so the UI can distinguish rate-limit errors from other errors (invalid ticker, network error, no data) and render more specific guidance.",
+      "target": "frontend",
+      "source": {
+        "messageIds": [
+          "msg-user-1",
+          "msg-user-2"
+        ],
+        "quotes": [
+          "IT SAYS API LIMIT HAS BEEN REACHED",
+          "OK LETS TRY THAT OPTION"
+        ]
+      },
+      "acceptanceCriteria": [
+        "Market-data error results include a machine-readable indicator for rate-limited responses (e.g., a boolean flag or an error code) without breaking existing call sites.",
+        "Non-rate-limit errors continue to show the current error UI, but rate-limit errors use the new cooldown/retry UX and messaging.",
+        "Invalid ticker handling remains unchanged (still shows an immediate validation-style error without retry/backoff)."
       ]
     }
   ],
   "constraints": [
-    "Do not edit files under frontend/src/components/ui or any frontend immutable paths listed in SYSTEM_CONTEXT.",
-    "Keep Motoko backend logic in the single existing actor (backend/main.mo). Add backend methods there only if needed; do not introduce additional backend services.",
-    "Do not introduce third-party authentication providers; keep Internet Identity as-is."
+    "Frontend must not modify files under frontend/src/components/ui or any path listed in frontend.immutablePaths.",
+    "Backend must remain single-actor; do not introduce additional backend services or external databases.",
+    "Use English for all user-facing text.",
+    "Do not remove or rename the existing Alpha Vantage configuration values (baseUrl/provider/apiKey) in frontend/src/lib/marketData/config.ts; extend safely if needed."
   ],
   "nonGoals": [
-    "Real-time streaming quotes (e.g., websockets) and sub-second price updates.",
-    "Paid market data integrations requiring API keys (unless the user later supplies keys/endpoints).",
-    "Guaranteeing accuracy, completeness, or timeliness of external market data; the UI should surface limitations via status/timestamps instead."
+    "Switching to a different market-data provider or adding paid API key management UI.",
+    "Adding WebSockets or real-time streaming quotes.",
+    "Moving market-data fetching to a separate backend service (the platform is single-backend-actor and external DBs are not supported)."
   ],
   "imageRequirements": {
     "required": [],
     "edits": []
+  },
+  "userProfileUpdate": {
+    "goalsToAdd": [],
+    "goalsToRemove": [],
+    "preferencesToAdd": [],
+    "preferencesToRemove": [],
+    "miscToAdd": [],
+    "miscToRemove": [],
+    "fieldsToSet": {},
+    "fieldsToDelete": []
   }
 }

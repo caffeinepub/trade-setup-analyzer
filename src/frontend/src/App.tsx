@@ -20,7 +20,7 @@ import { validateNumericInput, validateRequired } from './lib/validation';
 import { computePotentialProfit, computePotentialLoss, formatCurrency, formatPercentage } from './lib/tradeMath';
 import { computeIndicatorsFromMarketData } from './lib/indicators';
 import { deriveTradeInputs } from './lib/marketData/deriveTradeInputs';
-import { TrendingUp, AlertTriangle, DollarSign, Target, Shield, RefreshCw, Activity, Clock } from 'lucide-react';
+import { TrendingUp, AlertTriangle, DollarSign, Target, Shield, RefreshCw, Activity, Clock, Timer } from 'lucide-react';
 import type { IndicatorData } from './lib/indicators';
 
 export default function App() {
@@ -163,6 +163,9 @@ export default function App() {
         : 'SHORT'
       : null;
 
+  // Determine if fetch/refresh should be disabled
+  const isFetchDisabled = marketData.isLoading || marketData.isCooldown;
+
   return (
     <div className="min-h-screen bg-background relative overflow-hidden">
       {/* Background illustration */}
@@ -232,13 +235,13 @@ export default function App() {
                               value={ticker}
                               onChange={(e) => {
                                 setTicker(e.target.value.toUpperCase());
-                                setIsDataDerived(false);
+                                setFormErrors((prev) => ({ ...prev, ticker: '' }));
                               }}
                               className={formErrors.ticker ? 'border-destructive' : ''}
                             />
                             <Button
                               onClick={handleFetchLiveData}
-                              disabled={marketData.isLoading || !ticker.trim()}
+                              disabled={isFetchDisabled}
                               variant="secondary"
                               className="shrink-0"
                             >
@@ -246,6 +249,11 @@ export default function App() {
                                 <>
                                   <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
                                   Loading...
+                                </>
+                              ) : marketData.isCooldown ? (
+                                <>
+                                  <Timer className="h-4 w-4 mr-2" />
+                                  {marketData.cooldownSecondsRemaining}s
                                 </>
                               ) : (
                                 <>
@@ -256,171 +264,165 @@ export default function App() {
                             </Button>
                           </div>
                           {formErrors.ticker && (
-                            <p className="text-xs text-destructive">{formErrors.ticker}</p>
+                            <p className="text-sm text-destructive">{formErrors.ticker}</p>
                           )}
                         </div>
 
                         {/* Live Data Status Panel */}
-                        {ticker && marketData.status !== 'idle' && (
-                          <div className="rounded-lg border bg-muted/50 p-3 space-y-2">
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-2">
-                                <Activity className="h-4 w-4 text-muted-foreground" />
-                                <span className="text-sm font-medium">Live Market Data</span>
-                              </div>
-                              {marketData.isSuccess && (
-                                <Button
-                                  onClick={handleRefreshData}
-                                  disabled={marketData.isLoading}
-                                  variant="ghost"
-                                  size="sm"
-                                >
-                                  <RefreshCw className={`h-3 w-3 ${marketData.isLoading ? 'animate-spin' : ''}`} />
-                                </Button>
-                              )}
-                            </div>
-
-                            {marketData.isLoading && (
-                              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                                <RefreshCw className="h-3 w-3 animate-spin" />
-                                Fetching market data...
-                              </div>
-                            )}
-
+                        {(marketData.isSuccess || marketData.isError || marketData.isCooldown) && (
+                          <div className="space-y-2">
                             {marketData.isSuccess && marketData.data && (
-                              <div className="space-y-1">
-                                <div className="flex items-center justify-between text-xs">
-                                  <span className="text-muted-foreground">Provider:</span>
-                                  <span className="font-medium">{marketData.data.provider}</span>
-                                </div>
-                                <div className="flex items-center justify-between text-xs">
-                                  <span className="text-muted-foreground">Latest Price:</span>
-                                  <span className="font-mono font-bold text-chart-1">
-                                    ${marketData.data.latestPrice.toFixed(2)}
-                                  </span>
-                                </div>
-                                <div className="flex items-center justify-between text-xs">
-                                  <span className="text-muted-foreground">Status:</span>
-                                  <Badge variant={marketData.data.isRealtime ? 'default' : 'secondary'} className="text-xs">
-                                    {marketData.data.isRealtime ? 'Real-time' : 'Last Close'}
-                                  </Badge>
-                                </div>
-                                {marketData.lastRefreshTime && (
-                                  <div className="flex items-center gap-1 text-xs text-muted-foreground pt-1">
-                                    <Clock className="h-3 w-3" />
-                                    Last updated: {marketData.lastRefreshTime.toLocaleTimeString()}
+                              <Alert className="border-success/50 bg-success/10">
+                                <Activity className="h-4 w-4 text-success" />
+                                <AlertDescription className="text-success">
+                                  <div className="flex items-center justify-between">
+                                    <div>
+                                      <strong>{marketData.data.ticker}</strong>: ${marketData.data.latestPrice.toFixed(2)}
+                                      <span className="text-xs ml-2 opacity-70">
+                                        ({marketData.data.isRealtime ? 'Real-time' : 'Last close'})
+                                      </span>
+                                    </div>
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      onClick={handleRefreshData}
+                                      disabled={isFetchDisabled}
+                                      className="h-7 text-xs"
+                                    >
+                                      {marketData.isCooldown ? (
+                                        <>
+                                          <Timer className="h-3 w-3 mr-1" />
+                                          {marketData.cooldownSecondsRemaining}s
+                                        </>
+                                      ) : (
+                                        <>
+                                          <RefreshCw className="h-3 w-3 mr-1" />
+                                          Refresh
+                                        </>
+                                      )}
+                                    </Button>
                                   </div>
-                                )}
-                              </div>
+                                  {marketData.lastRefreshTime && (
+                                    <div className="text-xs opacity-70 mt-1 flex items-center gap-1">
+                                      <Clock className="h-3 w-3" />
+                                      Last updated: {marketData.lastRefreshTime.toLocaleTimeString()}
+                                    </div>
+                                  )}
+                                </AlertDescription>
+                              </Alert>
                             )}
 
-                            {marketData.isError && marketData.error && (
-                              <Alert variant="destructive" className="py-2">
-                                <AlertTriangle className="h-3 w-3" />
-                                <AlertDescription className="text-xs">
-                                  {marketData.error}
+                            {marketData.isCooldown && (
+                              <Alert className="border-warning/50 bg-warning/10">
+                                <Timer className="h-4 w-4 text-warning" />
+                                <AlertDescription className="text-warning">
+                                  <div className="font-medium">Rate limit reached. Retrying in {marketData.cooldownSecondsRemaining}s...</div>
+                                  <div className="text-xs mt-1 opacity-80">
+                                    The app will automatically retry when the cooldown expires.
+                                  </div>
                                 </AlertDescription>
+                              </Alert>
+                            )}
+
+                            {marketData.isError && !marketData.isCooldown && (
+                              <Alert variant="destructive">
+                                <AlertTriangle className="h-4 w-4" />
+                                <AlertDescription>{marketData.error}</AlertDescription>
                               </Alert>
                             )}
                           </div>
                         )}
 
+                        <Separator />
+
+                        <div className="space-y-2">
+                          <Label htmlFor="entryPrice">Entry Price ($)</Label>
+                          <Input
+                            id="entryPrice"
+                            type="number"
+                            step="0.01"
+                            placeholder="0.00"
+                            value={entryPrice}
+                            onChange={(e) => {
+                              setEntryPrice(e.target.value);
+                              setIsDataDerived(false);
+                              setFormErrors((prev) => ({ ...prev, entryPrice: '' }));
+                            }}
+                            className={formErrors.entryPrice ? 'border-destructive' : ''}
+                          />
+                          {formErrors.entryPrice && (
+                            <p className="text-sm text-destructive">{formErrors.entryPrice}</p>
+                          )}
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label htmlFor="stopLossPrice">Stop Loss Price ($)</Label>
+                          <Input
+                            id="stopLossPrice"
+                            type="number"
+                            step="0.01"
+                            placeholder="0.00"
+                            value={stopLossPrice}
+                            onChange={(e) => {
+                              setStopLossPrice(e.target.value);
+                              setIsDataDerived(false);
+                              setFormErrors((prev) => ({ ...prev, stopLossPrice: '' }));
+                            }}
+                            className={formErrors.stopLossPrice ? 'border-destructive' : ''}
+                          />
+                          {formErrors.stopLossPrice && (
+                            <p className="text-sm text-destructive">{formErrors.stopLossPrice}</p>
+                          )}
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label htmlFor="takeProfitPrice">Take Profit Price ($)</Label>
+                          <Input
+                            id="takeProfitPrice"
+                            type="number"
+                            step="0.01"
+                            placeholder="0.00"
+                            value={takeProfitPrice}
+                            onChange={(e) => {
+                              setTakeProfitPrice(e.target.value);
+                              setIsDataDerived(false);
+                              setFormErrors((prev) => ({ ...prev, takeProfitPrice: '' }));
+                            }}
+                            className={formErrors.takeProfitPrice ? 'border-destructive' : ''}
+                          />
+                          {formErrors.takeProfitPrice && (
+                            <p className="text-sm text-destructive">{formErrors.takeProfitPrice}</p>
+                          )}
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label htmlFor="riskAmount">Risk Amount ($)</Label>
+                          <Input
+                            id="riskAmount"
+                            type="number"
+                            step="0.01"
+                            placeholder="0.00"
+                            value={riskAmount}
+                            onChange={(e) => {
+                              setRiskAmount(e.target.value);
+                              setFormErrors((prev) => ({ ...prev, riskAmount: '' }));
+                            }}
+                            className={formErrors.riskAmount ? 'border-destructive' : ''}
+                          />
+                          {formErrors.riskAmount && (
+                            <p className="text-sm text-destructive">{formErrors.riskAmount}</p>
+                          )}
+                        </div>
+
                         {isDataDerived && (
-                          <Alert className="bg-chart-1/10 border-chart-1/20">
-                            <Activity className="h-4 w-4 text-chart-1" />
-                            <AlertDescription className="text-xs">
-                              Trade levels auto-filled from live market data. You can edit these values as needed.
+                          <Alert className="border-primary/50 bg-primary/10">
+                            <Activity className="h-4 w-4 text-primary" />
+                            <AlertDescription className="text-primary text-sm">
+                              Trade levels auto-populated from live market data and technical indicators.
+                              You can adjust these values manually.
                             </AlertDescription>
                           </Alert>
                         )}
-
-                        <div className="grid grid-cols-2 gap-4">
-                          <div className="space-y-2">
-                            <Label htmlFor="entryPrice">
-                              Entry Price ($)
-                              {isDataDerived && <span className="text-xs text-chart-1 ml-1">• Auto</span>}
-                            </Label>
-                            <Input
-                              id="entryPrice"
-                              type="number"
-                              step="0.01"
-                              placeholder="0.00"
-                              value={entryPrice}
-                              onChange={(e) => {
-                                setEntryPrice(e.target.value);
-                                setIsDataDerived(false);
-                              }}
-                              className={formErrors.entryPrice ? 'border-destructive' : ''}
-                            />
-                            {formErrors.entryPrice && (
-                              <p className="text-xs text-destructive">{formErrors.entryPrice}</p>
-                            )}
-                          </div>
-
-                          <div className="space-y-2">
-                            <Label htmlFor="stopLossPrice">
-                              Stop Loss ($)
-                              {isDataDerived && <span className="text-xs text-chart-1 ml-1">• Auto</span>}
-                            </Label>
-                            <Input
-                              id="stopLossPrice"
-                              type="number"
-                              step="0.01"
-                              placeholder="0.00"
-                              value={stopLossPrice}
-                              onChange={(e) => {
-                                setStopLossPrice(e.target.value);
-                                setIsDataDerived(false);
-                              }}
-                              className={formErrors.stopLossPrice ? 'border-destructive' : ''}
-                            />
-                            {formErrors.stopLossPrice && (
-                              <p className="text-xs text-destructive">{formErrors.stopLossPrice}</p>
-                            )}
-                          </div>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-4">
-                          <div className="space-y-2">
-                            <Label htmlFor="takeProfitPrice">
-                              Take Profit ($)
-                              {isDataDerived && <span className="text-xs text-chart-1 ml-1">• Auto</span>}
-                            </Label>
-                            <Input
-                              id="takeProfitPrice"
-                              type="number"
-                              step="0.01"
-                              placeholder="0.00"
-                              value={takeProfitPrice}
-                              onChange={(e) => {
-                                setTakeProfitPrice(e.target.value);
-                                setIsDataDerived(false);
-                              }}
-                              className={formErrors.takeProfitPrice ? 'border-destructive' : ''}
-                            />
-                            {formErrors.takeProfitPrice && (
-                              <p className="text-xs text-destructive">
-                                {formErrors.takeProfitPrice}
-                              </p>
-                            )}
-                          </div>
-
-                          <div className="space-y-2">
-                            <Label htmlFor="riskAmount">Risk Amount ($)</Label>
-                            <Input
-                              id="riskAmount"
-                              type="number"
-                              step="0.01"
-                              placeholder="0.00"
-                              value={riskAmount}
-                              onChange={(e) => setRiskAmount(e.target.value)}
-                              className={formErrors.riskAmount ? 'border-destructive' : ''}
-                            />
-                            {formErrors.riskAmount && (
-                              <p className="text-xs text-destructive">{formErrors.riskAmount}</p>
-                            )}
-                          </div>
-                        </div>
 
                         <Button
                           onClick={handleAnalyze}
@@ -428,135 +430,185 @@ export default function App() {
                           className="w-full"
                           size="lg"
                         >
-                          {isPending ? 'Analyzing...' : 'Analyze Trade Setup'}
+                          {isPending ? (
+                            <>
+                              <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                              Analyzing...
+                            </>
+                          ) : (
+                            <>
+                              <Target className="h-4 w-4 mr-2" />
+                              Analyze Trade Setup
+                            </>
+                          )}
                         </Button>
-
-                        {error && (
-                          <Alert variant="destructive">
-                            <AlertTriangle className="h-4 w-4" />
-                            <AlertDescription>
-                              {error instanceof Error ? error.message : 'Analysis failed'}
-                            </AlertDescription>
-                          </Alert>
-                        )}
                       </CardContent>
                     </Card>
 
-                    <CsvUploadPanel onIndicatorsComputed={setIndicators} />
+                    {/* CSV Upload Panel */}
+                    <CsvUploadPanel onIndicatorsComputed={(csvIndicators) => {
+                      // Only update indicators if no live data is present
+                      if (!marketData.isSuccess) {
+                        setIndicators(csvIndicators);
+                      }
+                    }} />
                   </div>
 
-                  {/* Results */}
+                  {/* Results Panel */}
                   <div className="space-y-6">
                     {result && (
                       <>
-                        <Card className="border-chart-1/20 bg-card/50 backdrop-blur">
+                        <Card>
                           <CardHeader>
                             <CardTitle className="flex items-center gap-2">
-                              <Target className="h-5 w-5 text-chart-1" />
-                              Trade Setup Analysis
+                              <Target className="h-5 w-5" />
+                              Trade Setup Results
                             </CardTitle>
                             <CardDescription>
-                              {ticker} • {direction} Position
+                              Calculated position size and risk/reward analysis
                             </CardDescription>
                           </CardHeader>
-                          <CardContent className="space-y-6">
+                          <CardContent className="space-y-4">
+                            {direction && (
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm text-muted-foreground">Direction:</span>
+                                <Badge
+                                  variant={direction === 'LONG' ? 'default' : 'secondary'}
+                                  className="font-mono"
+                                >
+                                  {direction}
+                                </Badge>
+                              </div>
+                            )}
+
                             <div className="grid grid-cols-2 gap-4">
                               <div className="space-y-1">
-                                <p className="text-sm text-muted-foreground">Position Size</p>
-                                <p className="text-2xl font-bold">
-                                  {result.positionSize.toFixed(2)} shares
-                                </p>
+                                <div className="text-sm text-muted-foreground flex items-center gap-1">
+                                  <DollarSign className="h-3 w-3" />
+                                  Position Size
+                                </div>
+                                <div className="text-2xl font-bold font-mono">
+                                  {result.positionSize.toFixed(2)}
+                                </div>
+                                <div className="text-xs text-muted-foreground">shares</div>
                               </div>
+
                               <div className="space-y-1">
-                                <p className="text-sm text-muted-foreground">Risk:Reward</p>
-                                <p className="text-2xl font-bold text-chart-1">
-                                  1:{result.riskRewardRatio.toFixed(2)}
-                                </p>
+                                <div className="text-sm text-muted-foreground flex items-center gap-1">
+                                  <TrendingUp className="h-3 w-3" />
+                                  Risk/Reward
+                                </div>
+                                <div className="text-2xl font-bold font-mono">
+                                  {result.riskRewardRatio.toFixed(2)}
+                                </div>
+                                <div className="text-xs text-muted-foreground">ratio</div>
                               </div>
                             </div>
 
                             <Separator />
 
                             <div className="space-y-3">
-                              <div className="flex items-center justify-between p-3 rounded-lg bg-chart-2/10 border border-chart-2/20">
+                              <div className="flex items-center justify-between p-3 rounded-lg bg-success/10 border border-success/20">
                                 <div className="flex items-center gap-2">
-                                  <DollarSign className="h-4 w-4 text-chart-2" />
-                                  <span className="text-sm font-medium">Potential Profit</span>
+                                  <Target className="h-4 w-4 text-success" />
+                                  <span className="text-sm font-medium text-success">
+                                    Potential Profit
+                                  </span>
                                 </div>
                                 <div className="text-right">
-                                  <p className="font-bold text-chart-2">
+                                  <div className="font-bold font-mono text-success">
                                     {formatCurrency(potentialProfit || 0)}
-                                  </p>
-                                  <p className="text-xs text-muted-foreground">
-                                    {formatPercentage(profitPercentage || 0)}
-                                  </p>
+                                  </div>
+                                  {profitPercentage !== null && (
+                                    <div className="text-xs text-success/70">
+                                      {formatPercentage(profitPercentage)}
+                                    </div>
+                                  )}
                                 </div>
                               </div>
 
                               <div className="flex items-center justify-between p-3 rounded-lg bg-destructive/10 border border-destructive/20">
                                 <div className="flex items-center gap-2">
                                   <Shield className="h-4 w-4 text-destructive" />
-                                  <span className="text-sm font-medium">Potential Loss</span>
+                                  <span className="text-sm font-medium text-destructive">
+                                    Potential Loss
+                                  </span>
                                 </div>
                                 <div className="text-right">
-                                  <p className="font-bold text-destructive">
+                                  <div className="font-bold font-mono text-destructive">
                                     {formatCurrency(potentialLoss || 0)}
-                                  </p>
-                                  <p className="text-xs text-muted-foreground">
-                                    {formatPercentage(lossPercentage || 0)}
-                                  </p>
+                                  </div>
+                                  {lossPercentage !== null && (
+                                    <div className="text-xs text-destructive/70">
+                                      {formatPercentage(lossPercentage)}
+                                    </div>
+                                  )}
                                 </div>
                               </div>
+                            </div>
+
+                            <Separator />
+
+                            <div className="space-y-2">
+                              <h4 className="text-sm font-medium">Explanation</h4>
+                              <p className="text-sm text-muted-foreground leading-relaxed">
+                                {result.explanation}
+                              </p>
                             </div>
                           </CardContent>
                         </Card>
 
-                        <Card>
-                          <CardHeader>
-                            <CardTitle className="text-base">Analysis Explanation</CardTitle>
-                          </CardHeader>
-                          <CardContent className="space-y-3">
-                            <p className="text-sm text-muted-foreground leading-relaxed">
-                              {result.explanation}
-                            </p>
-
-                            {indicators && (
-                              <>
-                                <Separator className="my-3" />
-                                <div className="space-y-2">
-                                  <p className="text-sm font-medium">Technical Indicators</p>
-                                  <div className="space-y-1 text-sm text-muted-foreground">
-                                    {indicators.sma20 && (
-                                      <p>• 20-period SMA: ${indicators.sma20.toFixed(2)}</p>
-                                    )}
-                                    {indicators.support && (
-                                      <p>• Support Level: ${indicators.support.toFixed(2)}</p>
-                                    )}
-                                    {indicators.resistance && (
-                                      <p>• Resistance Level: ${indicators.resistance.toFixed(2)}</p>
-                                    )}
+                        {indicators && (
+                          <Card>
+                            <CardHeader>
+                              <CardTitle className="flex items-center gap-2">
+                                <Activity className="h-5 w-5" />
+                                Technical Indicators
+                              </CardTitle>
+                              <CardDescription>
+                                Computed from recent price data
+                              </CardDescription>
+                            </CardHeader>
+                            <CardContent className="space-y-3">
+                              <div className="grid grid-cols-2 gap-4">
+                                {indicators.sma20 !== undefined && (
+                                  <div className="space-y-1">
+                                    <div className="text-sm text-muted-foreground">20-day SMA</div>
+                                    <div className="text-lg font-mono font-semibold">
+                                      ${indicators.sma20.toFixed(2)}
+                                    </div>
                                   </div>
-                                  <p className="text-xs text-muted-foreground italic mt-2">
-                                    {isDataDerived
-                                      ? 'These indicators are derived from live market data and were used to auto-populate your trade levels.'
-                                      : 'These indicators provide additional context for the trade setup. Consider how price action relates to these levels when planning your trade.'}
-                                  </p>
-                                </div>
-                              </>
-                            )}
-
-                            <Alert className="mt-4">
-                              <AlertTriangle className="h-4 w-4" />
-                              <AlertDescription className="text-xs">
-                                This analysis is for educational purposes only and does not
-                                constitute financial advice. Trading involves substantial risk of
-                                loss. Always conduct your own research and consider consulting with a
-                                licensed financial advisor.
-                              </AlertDescription>
-                            </Alert>
-                          </CardContent>
-                        </Card>
+                                )}
+                                {indicators.support !== undefined && (
+                                  <div className="space-y-1">
+                                    <div className="text-sm text-muted-foreground">Support</div>
+                                    <div className="text-lg font-mono font-semibold text-destructive">
+                                      ${indicators.support.toFixed(2)}
+                                    </div>
+                                  </div>
+                                )}
+                                {indicators.resistance !== undefined && (
+                                  <div className="space-y-1">
+                                    <div className="text-sm text-muted-foreground">Resistance</div>
+                                    <div className="text-lg font-mono font-semibold text-success">
+                                      ${indicators.resistance.toFixed(2)}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            </CardContent>
+                          </Card>
+                        )}
                       </>
+                    )}
+
+                    {error && (
+                      <Alert variant="destructive">
+                        <AlertTriangle className="h-4 w-4" />
+                        <AlertDescription>
+                          {error instanceof Error ? error.message : 'An error occurred during analysis'}
+                        </AlertDescription>
+                      </Alert>
                     )}
                   </div>
                 </div>
@@ -567,39 +619,42 @@ export default function App() {
               </TabsContent>
             </Tabs>
           ) : (
-            <div className="max-w-2xl mx-auto text-center space-y-6 py-12">
-              <div className="space-y-2">
-                <h2 className="text-3xl font-bold tracking-tight">Welcome to Trade Setup Analyzer</h2>
+            <Card className="max-w-2xl mx-auto">
+              <CardHeader>
+                <CardTitle>Welcome to Trade Setup Analyzer</CardTitle>
+                <CardDescription>
+                  An educational tool for analyzing trade setups with risk/reward calculations
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
                 <p className="text-muted-foreground">
-                  Analyze your trade setups with live market data and technical indicators
+                  Please log in to access the trade analyzer and save your analysis history.
                 </p>
-              </div>
-              <div className="flex justify-center">
                 <LoginButton />
-              </div>
-            </div>
+              </CardContent>
+            </Card>
           )}
         </main>
 
         {/* Footer */}
-        <footer className="border-t border-border/40 mt-12">
-          <div className="container mx-auto px-4 py-6">
-            <div className="flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-muted-foreground">
-              <p>© {new Date().getFullYear()} Trade Setup Analyzer. Educational purposes only.</p>
-              <p>
-                Built with ❤️ using{' '}
-                <a
-                  href={`https://caffeine.ai/?utm_source=Caffeine-footer&utm_medium=referral&utm_content=${encodeURIComponent(
-                    typeof window !== 'undefined' ? window.location.hostname : 'trade-analyzer'
-                  )}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="hover:text-foreground transition-colors"
-                >
-                  caffeine.ai
-                </a>
-              </p>
-            </div>
+        <footer className="border-t border-border/40 mt-16 py-8">
+          <div className="container mx-auto px-4 text-center text-sm text-muted-foreground">
+            <p>
+              © {new Date().getFullYear()} Trade Setup Analyzer. Built with ❤️ using{' '}
+              <a
+                href={`https://caffeine.ai/?utm_source=Caffeine-footer&utm_medium=referral&utm_content=${encodeURIComponent(
+                  typeof window !== 'undefined' ? window.location.hostname : 'trade-setup-analyzer'
+                )}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-primary hover:underline"
+              >
+                caffeine.ai
+              </a>
+            </p>
+            <p className="mt-2 text-xs">
+              Educational purposes only. Not financial advice. Always do your own research.
+            </p>
           </div>
         </footer>
       </div>
