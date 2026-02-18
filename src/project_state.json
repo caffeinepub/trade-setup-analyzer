@@ -1,0 +1,120 @@
+{
+  "schemaVersion": "1.0.0",
+  "projectStateVersion": 5,
+  "summary": "Build an HTML5 web app where a user inputs a stock ticker/symbol and the app pulls live market data to analyze it and propose a trade setup (entry, stop loss, take profit) and potential earnings, rather than requiring the user to manually supply those values.",
+  "architectural_notes": [
+    "Add live market-data integration (choose provider/API), including rate-limiting, error handling, and caching/fallback behavior when data is unavailable."
+  ],
+  "known_issues": [
+    "Current UI requests manual analysis inputs (e.g., current price/swing levels), but user expectation is that the app derives these from the ticker via live data analysis."
+  ],
+  "isFixRequest": true,
+  "existing_features": [
+    {
+      "id": "feature-create-a-single-page-ui-where-the-user-can-input-a-stock-symbol-ticker-and-analysis-inputs-at-minimum-current-price-recent-swing-high-recent-swing-low-and-position-sizing-inputs-such-as-account-size-and-risk-per-trade-then-request-an-analysis-and-display-a-proposed-trade-setup-including-direction-long-short-entry-stop-loss-take-profit-risk-reward-ratio-and-potential-profit-loss-in-both-and",
+      "title": "Create a single-page UI where the user can input a stock symbol/ticker and analysis inputs (at minimum: current price, recent swing high, recent swing low, and position sizing inputs such as account size and risk-per-trade %), then request an analysis and display a proposed trade setup including: direction (long/short), entry, stop loss, take profit, risk:reward ratio, and potential profit/loss in both $ and %.",
+      "reqIds": [
+        "REQ-1"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-add-the-option-for-the-user-to-provide-historical-price-data-via-a-csv-upload-ohlcv-or-at-minimum-date-close-when-provided-compute-basic-technical-indicators-locally-in-the-app-e-g-simple-moving-averages-and-recent-support-resistance-levels-and-incorporate-them-into-the-analysis-explanation",
+      "title": "Add the option for the user to provide historical price data via a CSV upload (OHLCV or at minimum date + close). When provided, compute basic technical indicators locally in the app (e.g., simple moving averages and recent support/resistance levels) and incorporate them into the analysis explanation.",
+      "reqIds": [
+        "REQ-3"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-persist-analysis-history-per-user-keyed-by-internet-computer-principal-so-the-user-can-view-past-analyses-including-ticker-timestamp-input-snapshot-and-returned-trade-setup-provide-ui-to-list-history-and-view-a-single-saved-analysis-detail",
+      "title": "Persist analysis history per user (keyed by Internet Computer principal) so the user can view past analyses, including ticker, timestamp, input snapshot, and returned trade setup. Provide UI to list history and view a single saved analysis detail.",
+      "reqIds": [
+        "REQ-4"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-include-clear-user-facing-disclaimers-that-the-output-is-for-educational-purposes-only-and-not-financial-advice-and-that-markets-are-risky-require-the-user-to-acknowledge-the-disclaimer-before-running-the-first-analysis-per-browser-session",
+      "title": "Include clear user-facing disclaimers that the output is for educational purposes only and not financial advice, and that markets are risky. Require the user to acknowledge the disclaimer before running the first analysis (per browser session).",
+      "reqIds": [
+        "REQ-5"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-apply-a-coherent-distinctive-visual-theme-colors-typography-spacing-and-component-styling-appropriate-for-a-trading-tool-and-use-it-consistently-across-the-app",
+      "title": "Apply a coherent, distinctive visual theme (colors, typography, spacing, and component styling) appropriate for a trading tool, and use it consistently across the app.",
+      "reqIds": [
+        "REQ-6"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-add-generated-static-image-assets-for-branding-logo-and-a-subtle-background-hero-illustration-and-render-them-in-the-ui-served-from-frontend-public-assets-generated",
+      "title": "Add generated static image assets for branding (logo) and a subtle background/hero illustration, and render them in the UI (served from frontend/public/assets/generated).",
+      "reqIds": [
+        "REQ-7"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-add-live-market-data-fetching-for-a-user-entered-ticker-symbol-so-the-app-can-retrieve-recent-price-history-and-a-latest-price-when-available-from-an-external-market-data-http-endpoint-without-requiring-the-user-to-manually-type-current-price-swing-levels",
+      "title": "Add live market data fetching for a user-entered ticker symbol so the app can retrieve recent price history and a latest price (when available) from an external market-data HTTP endpoint, without requiring the user to manually type current price / swing levels.",
+      "reqIds": [
+        "REQ-8"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-derive-analysis-inputs-automatically-from-the-fetched-live-market-data-compute-recent-support-resistance-or-recent-swing-low-high-from-the-fetched-ohlc-close-series-using-the-existing-indicator-computation-approach-and-use-those-derived-values-to-auto-populate-the-trade-parameter-fields-entry-stop-take-profit-so-the-user-is-no-longer-required-to-supply-these-numbers-manually",
+      "title": "Derive analysis inputs automatically from the fetched live market data: compute recent support/resistance (or recent swing low/high) from the fetched OHLC/close series using the existing indicator computation approach, and use those derived values to auto-populate the trade parameter fields (entry/stop/take-profit) so the user is no longer required to supply these numbers manually.",
+      "reqIds": [
+        "REQ-9"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-update-the-analyze-flow-so-the-primary-action-uses-the-live-data-derived-inputs-by-default-running-an-analysis-after-a-successful-live-data-fetch-should-send-the-derived-or-user-overridden-entry-stop-take-profit-values-and-the-user-entered-risk-amount-to-the-existing-backend-analysis-endpoint-and-the-results-ui-should-continue-to-work-unchanged",
+      "title": "Update the analyze flow so the primary action uses the live-data-derived inputs by default: running an analysis after a successful live-data fetch should send the derived (or user-overridden) entry/stop/take-profit values and the user-entered risk amount to the existing backend analysis endpoint, and the results UI should continue to work unchanged.",
+      "reqIds": [
+        "REQ-10"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-add-a-small-live-data-status-panel-in-the-analyzer-tab-that-shows-data-source-label-last-refresh-time-and-a-manual-refresh-data-control-to-re-fetch-live-market-data-for-the-currently-entered-ticker",
+      "title": "Add a small live-data status panel in the Analyzer tab that shows: data source label, last refresh time, and a manual “Refresh Data” control to re-fetch live market data for the currently entered ticker.",
+      "reqIds": [
+        "REQ-11"
+      ],
+      "version": 1
+    }
+  ],
+  "new_feature_requests": [
+    {
+      "id": "AR-1",
+      "summary": "HTML5 app to input a stock and analyze it to generate a trade setup (entry, stop loss, take profit) plus potential earnings",
+      "reqIds": [],
+      "status": "pending"
+    },
+    {
+      "id": "AR-3",
+      "summary": "Implement a deterministic trade-setup analysis engine that derives entry/stop/take-profit and position sizing from the user inputs, and returns an explanation of how each value was computed (human-readable steps).",
+      "reqIds": [
+        "REQ-2"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "AR-4",
+      "summary": "Fetch/analyze live stock price data from a user-entered ticker so the app can auto-populate analysis inputs (e.g., current price, recent swing high/low) instead of asking the user to enter them manually.",
+      "reqIds": [],
+      "status": "pending"
+    }
+  ],
+  "gameProjectType": "none",
+  "projectName": "Trade Setup Analyzer",
+  "clarification_mode": "instant",
+  "clarification_rounds": 0
+}

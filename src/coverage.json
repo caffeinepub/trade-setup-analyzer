@@ -1,0 +1,95 @@
+{
+  "kind": "coverage_report",
+  "version": "1.0",
+  "generatedAt": "2026-02-18T03:09:13.166Z",
+  "sources": {
+    "buildRequest": true,
+    "implementationPlan": true
+  },
+  "requirements": {
+    "total": 4,
+    "implemented": 4,
+    "items": [
+      {
+        "id": "REQ-10",
+        "summary": "Update the analyze flow so the primary action uses the live-data-derived inputs by default: running an analysis after a successful live-data fetch should send the derived (or user-overridden) entry/stop/take-profit values and the user-entered risk amount to the existing backend analysis endpoint, and the results UI should continue to work unchanged.",
+        "status": "implemented",
+        "plannedFiles": [
+          "frontend/src/App.tsx",
+          "frontend/src/hooks/useTradeAnalysis.ts"
+        ],
+        "matchedFiles": [
+          "frontend/src/App.tsx",
+          "frontend/src/hooks/useTradeAnalysis.ts"
+        ]
+      },
+      {
+        "id": "REQ-11",
+        "summary": "Add a small live-data status panel in the Analyzer tab that shows: data source label, last refresh time, and a manual “Refresh Data” control to re-fetch live market data for the currently entered ticker.",
+        "status": "implemented",
+        "plannedFiles": [
+          "frontend/src/hooks/useMarketData.ts",
+          "frontend/src/App.tsx"
+        ],
+        "matchedFiles": [
+          "frontend/src/hooks/useMarketData.ts",
+          "frontend/src/App.tsx"
+        ]
+      },
+      {
+        "id": "REQ-8",
+        "summary": "Add live market data fetching for a user-entered ticker symbol so the app can retrieve recent price history and a latest price (when available) from an external market-data HTTP endpoint, without requiring the user to manually type current price / swing levels.",
+        "status": "implemented",
+        "plannedFiles": [
+          "frontend/src/lib/marketData/config.ts",
+          "frontend/src/lib/marketData/types.ts",
+          "frontend/src/lib/marketData/fetchMarketData.ts",
+          "frontend/src/App.tsx"
+        ],
+        "matchedFiles": [
+          "frontend/src/lib/marketData/config.ts",
+          "frontend/src/lib/marketData/types.ts",
+          "frontend/src/lib/marketData/fetchMarketData.ts",
+          "frontend/src/App.tsx"
+        ]
+      },
+      {
+        "id": "REQ-9",
+        "summary": "Derive analysis inputs automatically from the fetched live market data: compute recent support/resistance (or recent swing low/high) from the fetched OHLC/close series using the existing indicator computation approach, and use those derived values to auto-populate the trade parameter fields (entry/stop/take-profit) so the user is no longer required to supply these numbers manually.",
+        "status": "implemented",
+        "plannedFiles": [
+          "frontend/src/lib/indicators.ts",
+          "frontend/src/lib/marketData/deriveTradeInputs.ts",
+          "frontend/src/App.tsx"
+        ],
+        "matchedFiles": [
+          "frontend/src/lib/indicators.ts",
+          "frontend/src/lib/marketData/deriveTradeInputs.ts",
+          "frontend/src/App.tsx"
+        ]
+      }
+    ]
+  },
+  "changedFiles": [
+    "backend/main.mo",
+    "build-request.json",
+    "build-template/README.md",
+    "feature_evidence.json",
+    "frontend-file-summaries.txt",
+    "frontend-implementation-plan.json",
+    "frontend/src/App.tsx",
+    "frontend/src/components/CsvUploadPanel.tsx",
+    "frontend/src/components/auth/ProfileSetupModal.tsx",
+    "frontend/src/hooks/useMarketData.ts",
+    "frontend/src/hooks/useTradeAnalysis.ts",
+    "frontend/src/lib/indicators.ts",
+    "frontend/src/lib/marketData/config.ts",
+    "frontend/src/lib/marketData/deriveTradeInputs.ts",
+    "frontend/src/lib/marketData/fetchMarketData.ts",
+    "frontend/src/lib/marketData/types.ts",
+    "project_state.json",
+    "scratch/component-selection.json",
+    "spec.md",
+    "spec_vs_diff_report.json"
+  ]
+}

@@ -1,0 +1,106 @@
+{
+  "kind": "implementation_plan",
+  "version": "1.0",
+  "title": "Trade Setup Analyzer — Live Market Data Fetch + Auto-Derived Trade Inputs",
+  "requirements": [
+    {
+      "id": "REQ-8",
+      "summary": "Fetch live/recent market price series for a user-entered ticker from a single configurable HTTP base URL and show loading, latest/last-close price, and timestamp with robust error handling.",
+      "acceptanceCriteria": [
+        "When a user enters a ticker and triggers data fetch, the UI shows a loading state and then displays fetched live/latest price and a timestamp (or clearly indicates when only last-close data is available).",
+        "If the ticker is invalid or the market-data request fails, the UI shows a clear error message in English and does not overwrite existing user-entered values.",
+        "The market-data provider endpoint used by the app is clearly indicated in code as a single configurable base URL (not scattered across components)."
+      ],
+      "file_operations": [
+        {
+          "path": "frontend/src/lib/marketData/config.ts",
+          "operation": "create",
+          "description": "Add a single configurable market-data HTTP base URL constant (and provider label) to ensure the provider configuration is centralized (not scattered)."
+        },
+        {
+          "path": "frontend/src/lib/marketData/types.ts",
+          "operation": "create",
+          "description": "Define minimal frontend types for fetched market data (series points, latest/last-close price, timestamps, and provider metadata) to support UI display and downstream derivations."
+        },
+        {
+          "path": "frontend/src/lib/marketData/fetchMarketData.ts",
+          "operation": "create",
+          "description": "Implement a market-data fetch helper that reads the base URL from frontend/src/lib/marketData/config.ts, validates the ticker input, fetches a recent price series, and returns a normalized result including latest price and a timestamp (or a clear last-close-only indication)."
+        },
+        {
+          "path": "frontend/src/App.tsx",
+          "operation": "modify",
+          "description": "Wire a 'Fetch Live Data' control near the ticker input, display loading and error states in English, and show fetched latest/last-close price plus a timestamp without overwriting existing manually-entered entry/stop/take-profit values on fetch failure."
+        }
+      ]
+    },
+    {
+      "id": "REQ-9",
+      "summary": "Compute support/resistance (recent swing low/high) from fetched series using existing indicator logic and auto-populate Entry/Stop/Take-Profit fields with editable, clearly labeled derived values.",
+      "acceptanceCriteria": [
+        "After successful live-data fetch, the app auto-fills Entry Price, Stop Loss, and Take Profit with derived values (and keeps Ticker filled).",
+        "Auto-filled values are clearly labeled as derived from live market data and remain editable (user can override).",
+        "Derived levels are computed from the fetched series (not from placeholder constants) and are consistent with the existing indicator logic (e.g., using recent min/max over a lookback window)."
+      ],
+      "file_operations": [
+        {
+          "path": "frontend/src/lib/indicators.ts",
+          "operation": "modify",
+          "description": "Extend indicator utilities to support computing support/resistance from market-data series (including close-only points when OHLC is partial) using the existing recent min/max lookback approach."
+        },
+        {
+          "path": "frontend/src/lib/marketData/deriveTradeInputs.ts",
+          "operation": "create",
+          "description": "Add a helper that converts normalized fetched series + computed indicators into derived trade input defaults (entry/stop/take-profit) using latest/last-close price plus recent support/resistance, returning values suitable for auto-filling while keeping them user-editable."
+        },
+        {
+          "path": "frontend/src/App.tsx",
+          "operation": "modify",
+          "description": "After successful fetch, compute derived levels from the fetched series and auto-fill Entry/Stop/Take-Profit fields; add UI labeling indicating values are derived from live market data while allowing user overrides."
+        }
+      ]
+    },
+    {
+      "id": "REQ-10",
+      "summary": "Update the analyze flow to default to live-derived (or user-overridden) inputs, guide users to fetch live data when missing, and keep results + History behavior unchanged.",
+      "acceptanceCriteria": [
+        "If live data has been fetched, clicking “Analyze Trade Setup” runs analysis using the current values shown in the input fields (derived by default, overridden if the user edited them).",
+        "If live data has not been fetched yet, the UI guides the user to fetch live data (or otherwise provides a clear path to proceed) rather than silently analyzing with empty/invalid values.",
+        "Successful analysis still saves to per-user history and the History tab continues to load past analyses without errors."
+      ],
+      "file_operations": [
+        {
+          "path": "frontend/src/App.tsx",
+          "operation": "modify",
+          "description": "Adjust 'Analyze Trade Setup' action gating and messaging: if live data is not fetched and required numeric fields are missing/invalid, show a clear English prompt to fetch live data (or fill fields manually), and ensure analysis uses the current form values shown (derived by default, overridden if edited)."
+        },
+        {
+          "path": "frontend/src/hooks/useTradeAnalysis.ts",
+          "operation": "modify",
+          "description": "Ensure the analysis mutation continues to accept the current form values without introducing coupling to market-data state, so results UI and History refresh behavior remain unchanged."
+        }
+      ]
+    },
+    {
+      "id": "REQ-11",
+      "summary": "Add a live-data status panel in the Analyzer tab showing data source, last refresh time, status state, and a Refresh control that preserves risk amount.",
+      "acceptanceCriteria": [
+        "The status panel is visible when a ticker is present and indicates one of: not fetched yet / loading / fetched successfully / error.",
+        "“Refresh Data” re-runs the fetch and updates derived values while preserving the user’s risk amount input.",
+        "User-facing strings are in English and consistent with the app’s existing tone."
+      ],
+      "file_operations": [
+        {
+          "path": "frontend/src/hooks/useMarketData.ts",
+          "operation": "create",
+          "description": "Create a dedicated hook to manage market-data fetch state (not fetched / loading / success / error), last refresh timestamp, and refetch behavior for the currently entered ticker."
+        },
+        {
+          "path": "frontend/src/App.tsx",
+          "operation": "modify",
+          "description": "Add a compact live-data status panel in the Analyzer tab (visible when ticker is present) showing provider label, status, and last refresh time, plus a 'Refresh Data' control that refetches and updates derived Entry/Stop/Take-Profit while preserving the current Risk Amount input."
+        }
+      ]
+    }
+  ]
+}

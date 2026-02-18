@@ -1,0 +1,88 @@
+{
+  "kind": "feature_evidence_report",
+  "features": [
+    {
+      "featureId": "feature-add-live-market-data-fetching-for-a-user-entered-ticker-symbol-so-the-app-can-retrieve-recent-price-history-and-a-latest-price-when-available-from-an-external-market-data-http-endpoint-without-requiring-the-user-to-manually-type-current-price-swing-levels",
+      "featureTitle": "Add live market data fetching for a user-entered ticker symbol so the app can retrieve recent price history and a latest price (when available) from an external market-data HTTP endpoint, without requiring the user to manually type current price / swing levels.",
+      "files": [
+        "frontend/src/App.tsx",
+        "frontend/src/lib/marketData/config.ts",
+        "frontend/src/lib/marketData/fetchMarketData.ts",
+        "frontend/src/lib/marketData/types.ts"
+      ],
+      "components": [
+        "authorization@4.0.0",
+        "core-infrastructure@1.0.2",
+        "shadcn-ui@1.0.0",
+        "build-template-react@1.0.0",
+        "initial-app@1.0.0",
+        "github-export-icp-cli@1.0.0"
+      ],
+      "testIds": [
+        "REQ-8"
+      ],
+      "confidence": "high"
+    },
+    {
+      "featureId": "feature-derive-analysis-inputs-automatically-from-the-fetched-live-market-data-compute-recent-support-resistance-or-recent-swing-low-high-from-the-fetched-ohlc-close-series-using-the-existing-indicator-computation-approach-and-use-those-derived-values-to-auto-populate-the-trade-parameter-fields-entry-stop-take-profit-so-the-user-is-no-longer-required-to-supply-these-numbers-manually",
+      "featureTitle": "Derive analysis inputs automatically from the fetched live market data: compute recent support/resistance (or recent swing low/high) from the fetched OHLC/close series using the existing indicator computation approach, and use those derived values to auto-populate the trade parameter fields (entry/stop/take-profit) so the user is no longer required to supply these numbers manually.",
+      "files": [
+        "frontend/src/App.tsx",
+        "frontend/src/lib/indicators.ts",
+        "frontend/src/lib/marketData/deriveTradeInputs.ts"
+      ],
+      "components": [
+        "authorization@4.0.0",
+        "core-infrastructure@1.0.2",
+        "shadcn-ui@1.0.0",
+        "build-template-react@1.0.0",
+        "initial-app@1.0.0",
+        "github-export-icp-cli@1.0.0"
+      ],
+      "testIds": [
+        "REQ-9"
+      ],
+      "confidence": "high"
+    },
+    {
+      "featureId": "feature-update-the-analyze-flow-so-the-primary-action-uses-the-live-data-derived-inputs-by-default-running-an-analysis-after-a-successful-live-data-fetch-should-send-the-derived-or-user-overridden-entry-stop-take-profit-values-and-the-user-entered-risk-amount-to-the-existing-backend-analysis-endpoint-and-the-results-ui-should-continue-to-work-unchanged",
+      "featureTitle": "Update the analyze flow so the primary action uses the live-data-derived inputs by default: running an analysis after a successful live-data fetch should send the derived (or user-overridden) entry/stop/take-profit values and the user-entered risk amount to the existing backend analysis endpoint, and the results UI should continue to work unchanged.",
+      "files": [
+        "frontend/src/App.tsx",
+        "frontend/src/hooks/useTradeAnalysis.ts"
+      ],
+      "components": [
+        "authorization@4.0.0",
+        "core-infrastructure@1.0.2",
+        "shadcn-ui@1.0.0",
+        "build-template-react@1.0.0",
+        "initial-app@1.0.0",
+        "github-export-icp-cli@1.0.0"
+      ],
+      "testIds": [
+        "REQ-10"
+      ],
+      "confidence": "high"
+    },
+    {
+      "featureId": "feature-add-a-small-live-data-status-panel-in-the-analyzer-tab-that-shows-data-source-label-last-refresh-time-and-a-manual-refresh-data-control-to-re-fetch-live-market-data-for-the-currently-entered-ticker",
+      "featureTitle": "Add a small live-data status panel in the Analyzer tab that shows: data source label, last refresh time, and a manual “Refresh Data” control to re-fetch live market data for the currently entered ticker.",
+      "files": [
+        "frontend/src/App.tsx",
+        "frontend/src/hooks/useMarketData.ts"
+      ],
+      "components": [
+        "authorization@4.0.0",
+        "core-infrastructure@1.0.2",
+        "shadcn-ui@1.0.0",
+        "build-template-react@1.0.0",
+        "initial-app@1.0.0",
+        "github-export-icp-cli@1.0.0"
+      ],
+      "testIds": [
+        "REQ-11"
+      ],
+      "confidence": "high"
+    }
+  ]
+}
