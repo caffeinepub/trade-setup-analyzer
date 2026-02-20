@@ -6,12 +6,13 @@ import { Alert, AlertDescription } from './ui/alert';
 import { parsePriceCsv } from '../lib/csv/parsePriceCsv';
 import { computeIndicators, type IndicatorData, type PriceData } from '../lib/indicators';
 import { Upload, CheckCircle2, AlertCircle, TrendingUp } from 'lucide-react';
+import type { PricePoint } from '../lib/marketData/types';
 
 interface CsvUploadPanelProps {
-  onIndicatorsComputed: (indicators: IndicatorData | null) => void;
+  onDataLoaded?: (data: { ticker: string; pricePoints: PricePoint[] }, indicators: IndicatorData) => void;
 }
 
-export default function CsvUploadPanel({ onIndicatorsComputed }: CsvUploadPanelProps) {
+export default function CsvUploadPanel({ onDataLoaded }: CsvUploadPanelProps) {
   const [status, setStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [message, setMessage] = useState('');
   const [indicators, setIndicators] = useState<IndicatorData | null>(null);
@@ -29,12 +30,10 @@ export default function CsvUploadPanel({ onIndicatorsComputed }: CsvUploadPanelP
         setStatus('error');
         setMessage(result.errors[0]);
         setIndicators(null);
-        onIndicatorsComputed(null);
       } else if (result.data.length === 0) {
         setStatus('error');
         setMessage('No valid data found in CSV');
         setIndicators(null);
-        onIndicatorsComputed(null);
       } else {
         // Convert CSV PriceData (with Date) to indicators PriceData (with string date)
         const priceData: PriceData[] = result.data.map(item => ({
@@ -50,7 +49,26 @@ export default function CsvUploadPanel({ onIndicatorsComputed }: CsvUploadPanelP
         setStatus('success');
         setMessage(`Successfully parsed ${result.data.length} price records`);
         setIndicators(computed);
-        onIndicatorsComputed(computed);
+
+        // Convert to PricePoint format for market data compatibility
+        if (onDataLoaded) {
+          const pricePoints: PricePoint[] = result.data.map(item => ({
+            timestamp: item.date.toISOString(),
+            open: item.open ?? item.close,
+            high: item.high ?? item.close,
+            low: item.low ?? item.close,
+            close: item.close,
+            volume: item.volume ?? 0,
+          }));
+
+          onDataLoaded(
+            {
+              ticker: file.name.replace('.csv', '').toUpperCase(),
+              pricePoints,
+            },
+            computed
+          );
+        }
       }
     };
 
@@ -58,7 +76,6 @@ export default function CsvUploadPanel({ onIndicatorsComputed }: CsvUploadPanelP
       setStatus('error');
       setMessage('Failed to read file');
       setIndicators(null);
-      onIndicatorsComputed(null);
     };
 
     reader.readAsText(file);

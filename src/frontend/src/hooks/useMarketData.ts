@@ -5,15 +5,18 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { marketDataClient } from '../lib/marketData/marketDataClient';
 import type { MarketDataResult, MarketDataError } from '../lib/marketData/types';
+import type { DiagnosticData } from '../lib/marketData/marketDataClient';
+import { hasUrlParam } from '../lib/urlParams';
 
 export type MarketDataStatus = 'idle' | 'loading' | 'success' | 'error' | 'cooldown';
 
 export interface MarketDataState {
   status: MarketDataStatus;
   data: MarketDataResult | null;
-  error: string | null;
+  error: MarketDataError | null;
   lastRefreshTime: Date | null;
   cooldownSecondsRemaining: number | null;
+  diagnostics?: DiagnosticData;
 }
 
 export function useMarketData() {
@@ -27,6 +30,7 @@ export function useMarketData() {
 
   const cooldownIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const currentTickerRef = useRef<string>('');
+  const debugMode = hasUrlParam('debug', 'market-data');
 
   // Cleanup cooldown interval on unmount
   useEffect(() => {
@@ -58,6 +62,7 @@ export function useMarketData() {
         setState(prev => ({
           ...prev,
           cooldownSecondsRemaining: remaining,
+          diagnostics: debugMode ? marketDataClient.getDiagnostics() : undefined,
         }));
       }
     };
@@ -67,16 +72,23 @@ export function useMarketData() {
 
     // Update every second
     cooldownIntervalRef.current = setInterval(updateCooldown, 1000);
-  }, []);
+  }, [debugMode]);
 
   const fetchData = useCallback(async (ticker: string) => {
     if (!ticker.trim()) {
       setState({
         status: 'error',
         data: null,
-        error: 'Please enter a ticker symbol',
+        error: {
+          ticker: '',
+          error: 'Please enter a ticker symbol',
+          provider: 'Alpha Vantage',
+          errorCode: 'invalid_ticker',
+          isRateLimited: false,
+        },
         lastRefreshTime: null,
         cooldownSecondsRemaining: null,
+        diagnostics: debugMode ? marketDataClient.getDiagnostics() : undefined,
       });
       return;
     }
@@ -88,6 +100,7 @@ export function useMarketData() {
       status: 'loading',
       error: null,
       cooldownSecondsRemaining: null,
+      diagnostics: debugMode ? marketDataClient.getDiagnostics() : undefined,
     }));
 
     const result = await marketDataClient.fetch(ticker);
@@ -105,9 +118,10 @@ export function useMarketData() {
         setState({
           status: 'cooldown',
           data: null,
-          error: result.error || 'Rate limit reached',
+          error: result,
           lastRefreshTime: new Date(),
           cooldownSecondsRemaining: Math.ceil((retryState.nextRetryTime - Date.now()) / 1000),
+          diagnostics: debugMode ? marketDataClient.getDiagnostics() : undefined,
         });
 
         // Start cooldown timer
@@ -125,29 +139,22 @@ export function useMarketData() {
                   setState({
                     status: 'cooldown',
                     data: null,
-                    error: retryResult.error || 'Rate limit reached',
+                    error: retryResult,
                     lastRefreshTime: new Date(),
                     cooldownSecondsRemaining: Math.ceil((newRetryState.nextRetryTime - Date.now()) / 1000),
+                    diagnostics: debugMode ? marketDataClient.getDiagnostics() : undefined,
                   });
                   startCooldownTimer(ticker, newRetryState.nextRetryTime);
-                } else {
-                  // Retries exhausted
-                  setState({
-                    status: 'error',
-                    data: null,
-                    error: retryResult.error || 'Rate limit reached',
-                    lastRefreshTime: new Date(),
-                    cooldownSecondsRemaining: null,
-                  });
                 }
               } else {
                 // Different error
                 setState({
                   status: 'error',
                   data: null,
-                  error: retryResult.error || 'An error occurred',
+                  error: retryResult,
                   lastRefreshTime: new Date(),
                   cooldownSecondsRemaining: null,
+                  diagnostics: debugMode ? marketDataClient.getDiagnostics() : undefined,
                 });
               }
             } else {
@@ -158,64 +165,46 @@ export function useMarketData() {
                 error: null,
                 lastRefreshTime: new Date(),
                 cooldownSecondsRemaining: null,
+                diagnostics: debugMode ? marketDataClient.getDiagnostics() : undefined,
               });
             }
           }
         });
-      } else {
-        // No retry state (retries exhausted)
-        setState({
-          status: 'error',
-          data: null,
-          error: result.error || 'Rate limit reached',
-          lastRefreshTime: new Date(),
-          cooldownSecondsRemaining: null,
-        });
       }
-    } else if (isErrorResult(result)) {
-      // Non-rate-limit error
+      return;
+    }
+
+    // Handle other errors
+    if (isErrorResult(result)) {
       setState({
         status: 'error',
         data: null,
-        error: result.error || 'An error occurred',
+        error: result,
         lastRefreshTime: new Date(),
         cooldownSecondsRemaining: null,
+        diagnostics: debugMode ? marketDataClient.getDiagnostics() : undefined,
       });
-    } else {
-      // Success
-      setState({
-        status: 'success',
-        data: result,
-        error: null,
-        lastRefreshTime: new Date(),
-        cooldownSecondsRemaining: null,
-      });
+      return;
     }
-  }, [startCooldownTimer]);
 
-  const reset = useCallback(() => {
-    if (cooldownIntervalRef.current) {
-      clearInterval(cooldownIntervalRef.current);
-      cooldownIntervalRef.current = null;
-    }
-    currentTickerRef.current = '';
+    // Success
     setState({
-      status: 'idle',
-      data: null,
+      status: 'success',
+      data: result,
       error: null,
-      lastRefreshTime: null,
+      lastRefreshTime: new Date(),
       cooldownSecondsRemaining: null,
+      diagnostics: debugMode ? marketDataClient.getDiagnostics() : undefined,
     });
-  }, []);
+  }, [startCooldownTimer, debugMode]);
 
   return {
     ...state,
     fetchData,
-    reset,
+    isIdle: state.status === 'idle',
     isLoading: state.status === 'loading',
     isSuccess: state.status === 'success',
     isError: state.status === 'error',
-    isIdle: state.status === 'idle',
     isCooldown: state.status === 'cooldown',
   };
 }

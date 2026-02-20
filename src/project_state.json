@@ -1,6 +1,6 @@
 {
   "schemaVersion": "1.0.0",
-  "projectStateVersion": 7,
+  "projectStateVersion": 9,
   "summary": "Build an HTML5 web app where a user inputs a stock ticker/symbol and the app pulls live market data to analyze it and propose a trade setup (entry, stop loss, take profit) and potential earnings, rather than requiring the user to manually supply those values.",
   "architectural_notes": [
     "Add live market-data integration (choose provider/API), including rate-limiting, error handling, and caching/fallback behavior when data is unavailable.",
@@ -8,7 +8,8 @@
   ],
   "known_issues": [
     "Current UI requests manual analysis inputs (e.g., current price/swing levels), but user expectation is that the app derives these from the ticker via live data analysis.",
-    "Live market-data API rate limit is being reached (provider blocks further requests temporarily), causing the app to fail fetching prices until the limit resets."
+    "Live market-data API rate limit is being reached (provider blocks further requests temporarily), causing the app to fail fetching prices until the limit resets.",
+    "App is currently experiencing issues fetching market data; root cause needs investigation (network, API key, provider availability, or response format change)."
   ],
   "isFixRequest": true,
   "existing_features": [
@@ -121,6 +122,46 @@
       "title": "Improve market-data error typing so the UI can distinguish rate-limit errors from other errors (invalid ticker, network error, no data) and render more specific guidance.",
       "reqIds": [
         "REQ-15"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-add-comprehensive-logging-to-the-market-data-fetch-pipeline-in-frontend-src-lib-marketdata-fetchmarketdata-ts-and-frontend-src-lib-marketdata-marketdataclient-ts-to-capture-raw-api-response-status-response-body-parsed-result-or-error-type-cache-hits-misses-retry-attempts-and-backoff-delays-log-at-debug-level-so-issues-can-be-diagnosed-without-exposing-sensitive-data",
+      "title": "Add comprehensive logging to the market data fetch pipeline in frontend/src/lib/marketData/fetchMarketData.ts and frontend/src/lib/marketData/marketDataClient.ts to capture: raw API response status, response body, parsed result or error type, cache hits/misses, retry attempts, and backoff delays. Log at debug level so issues can be diagnosed without exposing sensitive data.",
+      "reqIds": [
+        "REQ-16"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-validate-that-the-alpha-vantage-api-key-is-correctly-loaded-from-frontend-src-lib-marketdata-config-ts-and-that-the-constructed-request-url-matches-the-provider-s-expected-format-add-a-fallback-error-message-if-the-api-key-is-missing-or-malformed",
+      "title": "Validate that the Alpha Vantage API key is correctly loaded from frontend/src/lib/marketData/config.ts and that the constructed request URL matches the provider's expected format. Add a fallback error message if the API key is missing or malformed.",
+      "reqIds": [
+        "REQ-17"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-add-error-recovery-logic-in-frontend-src-hooks-usemarketdata-ts-to-handle-common-failure-modes-network-timeouts-increase-fetch-timeout-or-add-retry-unexpected-response-formats-log-the-raw-response-and-show-a-user-friendly-error-and-missing-or-empty-data-arrays-show-no-data-available-for-this-ticker",
+      "title": "Add error recovery logic in frontend/src/hooks/useMarketData.ts to handle common failure modes: network timeouts (increase fetch timeout or add retry), unexpected response formats (log the raw response and show a user-friendly error), and missing or empty data arrays (show 'No data available for this ticker').",
+      "reqIds": [
+        "REQ-18"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-improve-error-display-in-frontend-src-app-tsx-to-show-more-specific-guidance-based-on-the-error-type-returned-by-usemarketdata-rate-limit-errors-show-cooldown-timer-and-retry-info-invalid-ticker-errors-suggest-checking-the-symbol-network-errors-prompt-the-user-to-check-connectivity-and-api-errors-display-the-provider-s-message-if-available",
+      "title": "Improve error display in frontend/src/App.tsx to show more specific guidance based on the error type returned by useMarketData: rate limit errors show cooldown timer and retry info, invalid ticker errors suggest checking the symbol, network errors prompt the user to check connectivity, and API errors display the provider's message if available.",
+      "reqIds": [
+        "REQ-19"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-add-a-developer-friendly-diagnostic-mode-enabled-via-url-parameter-debug-market-data-that-exposes-last-request-details-raw-api-response-cache-state-retry-history-and-backoff-schedule-in-a-collapsible-panel-at-the-bottom-of-the-analyzer-tab",
+      "title": "Add a developer-friendly diagnostic mode (enabled via URL parameter ?debug=market-data) that exposes: last request details, raw API response, cache state, retry history, and backoff schedule in a collapsible panel at the bottom of the Analyzer tab.",
+      "reqIds": [
+        "REQ-20"
       ],
       "version": 1
     }

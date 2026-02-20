@@ -1,131 +1,122 @@
 {
   "kind": "implementation_plan",
   "version": "1.0",
-  "title": "Frontend rate-limit mitigation for live market data (cache, dedupe, spacing, backoff)",
+  "title": "Diagnose and fix market data fetch failures",
   "requirements": [
     {
-      "id": "REQ-12",
-      "summary": "Add client-side TTL caching for successful live market-data results keyed by normalized ticker.",
+      "id": "REQ-16",
+      "summary": "Add comprehensive logging to market data fetch pipeline to capture raw responses, errors, cache behavior, and retry attempts",
       "acceptanceCriteria": [
-        "When the user clicks “Fetch Live Data” multiple times for the same ticker within the cache TTL, only the first click performs a network request; subsequent clicks return cached data.",
-        "Cached entries are keyed at least by normalized ticker symbol (trimmed + uppercased) and include a stored fetch timestamp.",
-        "The cache TTL is configurable in code (a single constant) and defaults to a sensible short duration (e.g., ~60 seconds) to reduce rate-limit hits while still allowing refreshes.",
-        "Cache behavior does not break existing derived-input auto-population or analysis flow."
+        "Console logs show the full request/response flow for each market data fetch attempt",
+        "Error messages include the specific failure reason (network, API error, parse failure, rate limit)",
+        "Cache behavior is visible in logs (hit/miss, TTL remaining)"
       ],
       "file_operations": [
         {
-          "path": "frontend/src/lib/marketData/marketDataPolicy.ts",
-          "operation": "create",
-          "description": "Create centralized client policy constants for market-data fetching, including a single CACHE_TTL_MS constant (default ~60s) and shared helper(s) for ticker normalization."
-        },
-        {
-          "path": "frontend/src/lib/marketData/marketDataClient.ts",
-          "operation": "create",
-          "description": "Implement a client-side wrapper around existing fetch logic that maintains an in-memory cache of last successful MarketDataResult per normalized ticker, storing both result and fetch timestamp, and returns cached results within CACHE_TTL_MS."
-        },
-        {
-          "path": "frontend/src/hooks/useMarketData.ts",
+          "path": "frontend/src/lib/marketData/fetchMarketData.ts",
           "operation": "modify",
-          "description": "Switch hook to call the new marketDataClient wrapper so repeated fetches for the same normalized ticker reuse cached successful data within TTL while preserving current state transitions (success triggers derived-input auto-population in App)."
-        }
-      ]
-    },
-    {
-      "id": "REQ-13",
-      "summary": "Prevent overlapping and burst live market-data requests with in-flight de-duplication and per-ticker minimum spacing.",
-      "acceptanceCriteria": [
-        "If a fetch for a ticker is already in-flight, additional fetch attempts while loading do not create a second network request (they either await the same promise or no-op).",
-        "The app enforces a minimum interval between actual network calls per ticker (separate from caching), preventing rapid consecutive requests from the UI from generating bursts.",
-        "The UI “Fetch Live Data” and “Refresh” controls remain disabled while a request is in-flight, as they are today, and the underlying logic also prevents duplicate calls."
-      ],
-      "file_operations": [
-        {
-          "path": "frontend/src/lib/marketData/marketDataPolicy.ts",
-          "operation": "modify",
-          "description": "Add a single MIN_REQUEST_INTERVAL_MS constant (distinct from cache TTL) and any related policy constants needed to enforce per-ticker request spacing."
+          "description": "Add debug-level logging for: request URL construction, raw fetch response status and headers, response body (truncated if large), parsed result structure, error type and details (network, parse, rate limit), and validation failures. Log before and after each major operation without exposing the API key."
         },
         {
           "path": "frontend/src/lib/marketData/marketDataClient.ts",
           "operation": "modify",
-          "description": "Add per-ticker in-flight promise de-duplication so concurrent calls for the same normalized ticker share the same promise, and enforce MIN_REQUEST_INTERVAL_MS between actual network calls per ticker (queue/delay or otherwise prevent bursts without spawning multiple calls)."
-        },
-        {
-          "path": "frontend/src/hooks/useMarketData.ts",
-          "operation": "modify",
-          "description": "Ensure fetchData leverages the marketDataClient’s de-duplication/spacing and exposes loading state accurately so UI controls remain disabled during in-flight requests, while also preventing duplicates even if UI state changes."
-        },
-        {
-          "path": "frontend/src/App.tsx",
-          "operation": "modify",
-          "description": "Wire updated hook state into the Analyzer UI so “Fetch Live Data” and “Refresh” remain disabled during in-flight operations (and later during cooldown), without changing the existing derived-input and analysis flows."
+          "description": "Add debug-level logging for: cache lookups (hit/miss, TTL remaining, entry age), request de-duplication (new request vs. in-flight), spacing delays applied, retry attempts with backoff delay values, and final success or failure status. Include ticker symbol in all log entries for traceability."
         }
       ]
     },
     {
-      "id": "REQ-14",
-      "summary": "Automatically retry rate-limited market-data responses with exponential backoff and show a user-visible cooldown with next retry time.",
+      "id": "REQ-17",
+      "summary": "Validate API key presence and request URL format before making requests, with clear error messages for missing or malformed configuration",
       "acceptanceCriteria": [
-        "When the provider indicates a rate limit was reached, the app schedules an automatic retry using exponential backoff (with a maximum retry count and maximum delay).",
-        "During the backoff/cooldown window, the UI displays an English message indicating the app is waiting to retry (e.g., “Rate limit reached. Retrying in 20s…”).",
-        "Manual refresh/fetch controls are disabled during the cooldown window to prevent additional rate-limit hits, and re-enabled after success or after retries are exhausted.",
-        "If retries are exhausted, the app shows an English error message that explains the rate limit and suggests waiting or trying again later; it does not get stuck in a loading state."
+        "API key presence is checked before making requests",
+        "User sees a clear error message if the API key is missing or invalid",
+        "Request URL construction is logged for verification"
       ],
       "file_operations": [
         {
-          "path": "frontend/src/lib/marketData/marketDataPolicy.ts",
+          "path": "frontend/src/lib/marketData/config.ts",
           "operation": "modify",
-          "description": "Add exponential backoff policy constants (e.g., MAX_RETRIES, BASE_DELAY_MS, MAX_DELAY_MS) to keep retry behavior configurable in code."
-        },
-        {
-          "path": "frontend/src/lib/marketData/marketDataClient.ts",
-          "operation": "modify",
-          "description": "Detect typed rate-limit responses and implement automatic retry scheduling with exponential backoff, tracking cooldown state (next retry time, attempt count) and ensuring retries stop after MAX_RETRIES/maximum delay with a final explanatory English error."
-        },
-        {
-          "path": "frontend/src/hooks/useMarketData.ts",
-          "operation": "modify",
-          "description": "Extend hook state to represent a cooldown/backoff window (e.g., status 'cooldown' and a nextRetryAt/secondsRemaining field), disable manual fetch/refresh during cooldown, and ensure state resets cleanly after success or after retries are exhausted (no stuck loading)."
-        },
-        {
-          "path": "frontend/src/App.tsx",
-          "operation": "modify",
-          "description": "Update the Live Data Status Panel to render a clear English cooldown message including seconds until next retry (e.g., “Rate limit reached. Retrying in 20s…”), and disable “Fetch Live Data”/“Refresh” while cooldown is active, re-enabling after success or exhaustion."
-        }
-      ]
-    },
-    {
-      "id": "REQ-15",
-      "summary": "Introduce typed market-data errors so the UI can distinguish rate-limit conditions from other failures without breaking existing call sites.",
-      "acceptanceCriteria": [
-        "Market-data error results include a machine-readable indicator for rate-limited responses (e.g., a boolean flag or an error code) without breaking existing call sites.",
-        "Non-rate-limit errors continue to show the current error UI, but rate-limit errors use the new cooldown/retry UX and messaging.",
-        "Invalid ticker handling remains unchanged (still shows an immediate validation-style error without retry/backoff)."
-      ],
-      "file_operations": [
-        {
-          "path": "frontend/src/lib/marketData/types.ts",
-          "operation": "modify",
-          "description": "Extend MarketDataError typing with a machine-readable discriminator (e.g., errorCode and/or isRateLimited boolean), while keeping compatibility with existing checks like 'error' in result and preserving the existing error string for UI display."
+          "description": "Add a validation function that checks if MARKET_DATA_API_KEY is defined, non-empty, and has a minimum expected length. Export a validateApiKey() function that returns validation status without exposing the key value."
         },
         {
           "path": "frontend/src/lib/marketData/fetchMarketData.ts",
           "operation": "modify",
-          "description": "Update provider response parsing so Alpha Vantage rate-limit signals (e.g., 'Note'/'Information') return a typed rate-limit error, invalid ticker remains a typed invalid-ticker error (no retries), and other failures map to appropriate typed error categories."
+          "description": "Before constructing the request URL, call validateApiKey() and return a structured error if validation fails. Log the constructed URL (with API key masked or omitted) at debug level. Include clear error messages like 'API key is missing or invalid' in the returned MarketDataError."
+        }
+      ]
+    },
+    {
+      "id": "REQ-18",
+      "summary": "Add error recovery logic for network timeouts, unexpected response formats, and missing data with automatic retry and user-friendly messages",
+      "acceptanceCriteria": [
+        "Network timeouts trigger automatic retry with exponential backoff",
+        "Unexpected response formats are logged and display a clear error to the user",
+        "Empty or missing data shows a specific 'No data available' message instead of a generic error"
+      ],
+      "file_operations": [
+        {
+          "path": "frontend/src/hooks/useMarketData.ts",
+          "operation": "modify",
+          "description": "Add timeout handling to the fetch operation (e.g., 10-15 second timeout using AbortController). On timeout, trigger the existing retry mechanism. For empty or missing data arrays in the result, set a specific error message 'No data available for this ticker'. Log raw responses when parse or validation errors occur to aid debugging."
         },
+        {
+          "path": "frontend/src/lib/marketData/fetchMarketData.ts",
+          "operation": "modify",
+          "description": "Wrap fetch calls with timeout logic using AbortController. Enhance error detection to distinguish between network errors, timeout errors, and parse/validation errors. For unexpected response formats, log the raw response body (first 500 chars) and return a MarketDataError with type 'api_error' and a descriptive message."
+        },
+        {
+          "path": "frontend/src/lib/marketData/types.ts",
+          "operation": "modify",
+          "description": "If not already present, add 'timeout' and 'no_data' to the MarketDataErrorType union to clearly represent these failure modes. Ensure MarketDataError includes an optional rawResponse field for debugging unexpected formats."
+        }
+      ]
+    },
+    {
+      "id": "REQ-19",
+      "summary": "Improve error display in App.tsx with specific guidance for rate limits, invalid tickers, network issues, and API errors",
+      "acceptanceCriteria": [
+        "Rate limit errors display the cooldown timer and next retry time",
+        "Invalid ticker errors suggest verifying the symbol",
+        "Network errors include connectivity troubleshooting guidance",
+        "API-specific errors show the provider's error message when available"
+      ],
+      "file_operations": [
+        {
+          "path": "frontend/src/App.tsx",
+          "operation": "modify",
+          "description": "Replace the current generic error display with a switch or conditional logic based on marketData.error.type. For 'rate_limit', show a message with the cooldown timer and next retry time (derive from retryAfter or cooldownEndsAt). For 'api_error' with invalid ticker indicators, suggest checking the symbol. For 'network', prompt the user to check connectivity. For other API errors, display the provider's message from error.message if available."
+        }
+      ]
+    },
+    {
+      "id": "REQ-20",
+      "summary": "Add a developer diagnostic mode enabled via ?debug=market-data URL parameter showing request details, raw responses, cache state, and retry history",
+      "acceptanceCriteria": [
+        "Appending ?debug=market-data to the URL enables the diagnostic panel",
+        "Panel shows last request URL, response status, raw response body, and error details",
+        "Cache state (entries, TTL, hits/misses) is visible",
+        "Retry history and backoff schedule are displayed"
+      ],
+      "file_operations": [
         {
           "path": "frontend/src/lib/marketData/marketDataClient.ts",
           "operation": "modify",
-          "description": "Use the new typed error indicator to trigger cooldown/backoff only for rate-limit errors; ensure invalid ticker and other error categories bypass retry/backoff and preserve current immediate error behavior."
+          "description": "Extend the client to track diagnostic information: last request details (URL with masked key, timestamp), last response (status, body preview), cache statistics (entries count, hits, misses, TTL per entry), and retry history (attempt count, backoff delays, timestamps). Export a function to retrieve this diagnostic state."
         },
         {
           "path": "frontend/src/hooks/useMarketData.ts",
           "operation": "modify",
-          "description": "Update hook error handling to branch on typed errors: rate-limit errors drive cooldown/retry UX; non-rate-limit errors keep current error UI; invalid ticker remains immediate with no backoff."
+          "description": "Expose diagnostic data from the marketDataClient in the hook's return value. Include fields for lastRequestDetails, lastResponse, cacheStats, and retryHistory. Check for ?debug=market-data using the urlParams utility and conditionally populate this data."
+        },
+        {
+          "path": "frontend/src/components/DiagnosticPanel.tsx",
+          "operation": "create",
+          "description": "Create a collapsible panel component that accepts diagnostic data (request details, response, cache state, retry history) as props. Display this information in a developer-friendly format with labeled sections, monospace text for URLs/responses, and tables or lists for cache entries and retry attempts. Style it to appear at the bottom of the viewport when enabled."
         },
         {
           "path": "frontend/src/App.tsx",
           "operation": "modify",
-          "description": "Adjust rendering to ensure rate-limit errors are displayed via the new cooldown/retry messaging path, while non-rate-limit errors continue using the existing destructive alert; keep invalid ticker validation-style behavior unchanged."
+          "description": "Import urlParams utility and check for ?debug=market-data. If present, import and render the DiagnosticPanel component below the main content in the Analyzer tab, passing in the diagnostic data from useMarketData. Ensure the panel is only visible when the debug parameter is set."
         }
       ]
     }

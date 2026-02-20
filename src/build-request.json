@@ -1,115 +1,101 @@
 {
   "kind": "build_request",
-  "title": "Mitigate live market-data API rate limits with caching and automatic backoff",
-  "projectName": "Trade Setup Analyzer",
-  "priority": "normal",
+  "title": "Diagnose and fix market data fetch failures",
+  "priority": "high",
   "requirements": [
     {
-      "id": "REQ-12",
-      "text": "Add client-side caching for live market-data fetches so repeated requests for the same ticker within a short time window reuse the last successful result instead of calling the external API again.",
+      "id": "REQ-16",
+      "text": "Add comprehensive logging to the market data fetch pipeline in frontend/src/lib/marketData/fetchMarketData.ts and frontend/src/lib/marketData/marketDataClient.ts to capture: raw API response status, response body, parsed result or error type, cache hits/misses, retry attempts, and backoff delays. Log at debug level so issues can be diagnosed without exposing sensitive data.",
       "target": "frontend",
       "source": {
         "messageIds": [
-          "msg-user-1",
-          "msg-user-2"
+          "msg-last"
         ],
         "quotes": [
-          "IT SAYS API LIMIT HAS BEEN REACHED",
-          "OK LETS TRY THAT OPTION"
+          "the app is having trouble fetching the data. can you fix it..."
         ]
       },
       "acceptanceCriteria": [
-        "When the user clicks “Fetch Live Data” multiple times for the same ticker within the cache TTL, only the first click performs a network request; subsequent clicks return cached data.",
-        "Cached entries are keyed at least by normalized ticker symbol (trimmed + uppercased) and include a stored fetch timestamp.",
-        "The cache TTL is configurable in code (a single constant) and defaults to a sensible short duration (e.g., ~60 seconds) to reduce rate-limit hits while still allowing refreshes.",
-        "Cache behavior does not break existing derived-input auto-population or analysis flow."
+        "Console logs show the full request/response flow for each market data fetch attempt",
+        "Error messages include the specific failure reason (network, API error, parse failure, rate limit)",
+        "Cache behavior is visible in logs (hit/miss, TTL remaining)"
       ]
     },
     {
-      "id": "REQ-13",
-      "text": "Implement request de-duplication and minimum request spacing for live market-data fetches so the app cannot trigger multiple overlapping calls or burst requests that exceed the provider’s per-minute limit.",
+      "id": "REQ-17",
+      "text": "Validate that the Alpha Vantage API key is correctly loaded from frontend/src/lib/marketData/config.ts and that the constructed request URL matches the provider's expected format. Add a fallback error message if the API key is missing or malformed.",
       "target": "frontend",
       "source": {
         "messageIds": [
-          "msg-user-1",
-          "msg-user-2"
-        ],
-        "quotes": [
-          "IT SAYS API LIMIT HAS BEEN REACHED",
-          "OK LETS TRY THAT OPTION"
+          "msg-last"
         ]
       },
       "acceptanceCriteria": [
-        "If a fetch for a ticker is already in-flight, additional fetch attempts while loading do not create a second network request (they either await the same promise or no-op).",
-        "The app enforces a minimum interval between actual network calls per ticker (separate from caching), preventing rapid consecutive requests from the UI from generating bursts.",
-        "The UI “Fetch Live Data” and “Refresh” controls remain disabled while a request is in-flight, as they are today, and the underlying logic also prevents duplicate calls."
+        "API key presence is checked before making requests",
+        "User sees a clear error message if the API key is missing or invalid",
+        "Request URL construction is logged for verification"
       ]
     },
     {
-      "id": "REQ-14",
-      "text": "Add automatic retry with exponential backoff when the market-data provider responds with a rate-limit response (e.g., Alpha Vantage 'Note'/'Information') and expose a clear, user-facing cooldown state indicating when the next retry will occur.",
+      "id": "REQ-18",
+      "text": "Add error recovery logic in frontend/src/hooks/useMarketData.ts to handle common failure modes: network timeouts (increase fetch timeout or add retry), unexpected response formats (log the raw response and show a user-friendly error), and missing or empty data arrays (show 'No data available for this ticker').",
       "target": "frontend",
       "source": {
         "messageIds": [
-          "msg-user-1",
-          "msg-user-2"
-        ],
-        "quotes": [
-          "IT SAYS API LIMIT HAS BEEN REACHED",
-          "OK LETS TRY THAT OPTION"
+          "msg-last"
         ]
       },
       "acceptanceCriteria": [
-        "When the provider indicates a rate limit was reached, the app schedules an automatic retry using exponential backoff (with a maximum retry count and maximum delay).",
-        "During the backoff/cooldown window, the UI displays an English message indicating the app is waiting to retry (e.g., “Rate limit reached. Retrying in 20s…”).",
-        "Manual refresh/fetch controls are disabled during the cooldown window to prevent additional rate-limit hits, and re-enabled after success or after retries are exhausted.",
-        "If retries are exhausted, the app shows an English error message that explains the rate limit and suggests waiting or trying again later; it does not get stuck in a loading state."
+        "Network timeouts trigger automatic retry with exponential backoff",
+        "Unexpected response formats are logged and display a clear error to the user",
+        "Empty or missing data shows a specific 'No data available' message instead of a generic error"
       ]
     },
     {
-      "id": "REQ-15",
-      "text": "Improve market-data error typing so the UI can distinguish rate-limit errors from other errors (invalid ticker, network error, no data) and render more specific guidance.",
+      "id": "REQ-19",
+      "text": "Improve error display in frontend/src/App.tsx to show more specific guidance based on the error type returned by useMarketData: rate limit errors show cooldown timer and retry info, invalid ticker errors suggest checking the symbol, network errors prompt the user to check connectivity, and API errors display the provider's message if available.",
       "target": "frontend",
       "source": {
         "messageIds": [
-          "msg-user-1",
-          "msg-user-2"
-        ],
-        "quotes": [
-          "IT SAYS API LIMIT HAS BEEN REACHED",
-          "OK LETS TRY THAT OPTION"
+          "msg-last"
         ]
       },
       "acceptanceCriteria": [
-        "Market-data error results include a machine-readable indicator for rate-limited responses (e.g., a boolean flag or an error code) without breaking existing call sites.",
-        "Non-rate-limit errors continue to show the current error UI, but rate-limit errors use the new cooldown/retry UX and messaging.",
-        "Invalid ticker handling remains unchanged (still shows an immediate validation-style error without retry/backoff)."
+        "Rate limit errors display the cooldown timer and next retry time",
+        "Invalid ticker errors suggest verifying the symbol",
+        "Network errors include connectivity troubleshooting guidance",
+        "API-specific errors show the provider's error message when available"
+      ]
+    },
+    {
+      "id": "REQ-20",
+      "text": "Add a developer-friendly diagnostic mode (enabled via URL parameter ?debug=market-data) that exposes: last request details, raw API response, cache state, retry history, and backoff schedule in a collapsible panel at the bottom of the Analyzer tab.",
+      "target": "frontend",
+      "source": {
+        "messageIds": [
+          "msg-last"
+        ]
+      },
+      "acceptanceCriteria": [
+        "Appending ?debug=market-data to the URL enables the diagnostic panel",
+        "Panel shows last request URL, response status, raw response body, and error details",
+        "Cache state (entries, TTL, hits/misses) is visible",
+        "Retry history and backoff schedule are displayed"
       ]
     }
   ],
   "constraints": [
-    "Frontend must not modify files under frontend/src/components/ui or any path listed in frontend.immutablePaths.",
-    "Backend must remain single-actor; do not introduce additional backend services or external databases.",
-    "Use English for all user-facing text.",
-    "Do not remove or rename the existing Alpha Vantage configuration values (baseUrl/provider/apiKey) in frontend/src/lib/marketData/config.ts; extend safely if needed."
+    "Do not modify backend/main.mo; market data fetching is entirely frontend-side",
+    "Preserve existing rate-limit handling logic and retry mechanism in marketDataClient.ts",
+    "Do not expose the Alpha Vantage API key in logs or error messages"
   ],
   "nonGoals": [
-    "Switching to a different market-data provider or adding paid API key management UI.",
-    "Adding WebSockets or real-time streaming quotes.",
-    "Moving market-data fetching to a separate backend service (the platform is single-backend-actor and external DBs are not supported)."
+    "Switching to a different market data provider",
+    "Adding user-configurable API keys",
+    "Implementing server-side data fetching or caching"
   ],
   "imageRequirements": {
     "required": [],
     "edits": []
-  },
-  "userProfileUpdate": {
-    "goalsToAdd": [],
-    "goalsToRemove": [],
-    "preferencesToAdd": [],
-    "preferencesToRemove": [],
-    "miscToAdd": [],
-    "miscToRemove": [],
-    "fieldsToSet": {},
-    "fieldsToDelete": []
   }
 }

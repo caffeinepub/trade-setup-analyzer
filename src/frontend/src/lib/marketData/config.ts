@@ -21,3 +21,26 @@ export const MARKET_DATA_NOTES = {
   dataDelay: 'Data may be delayed by 15 minutes for free tier users.',
   supportedMarkets: 'Primarily US stock markets (NYSE, NASDAQ). Limited international coverage.',
 };
+
+/**
+ * Validate API key presence and format
+ */
+export function validateApiKey(): { valid: boolean; error?: string } {
+  const key = MARKET_DATA_CONFIG.apiKey;
+  
+  if (!key || key.trim() === '') {
+    return {
+      valid: false,
+      error: 'API key is missing. Please configure MARKET_DATA_API_KEY.',
+    };
+  }
+  
+  if (key.length < 3) {
+    return {
+      valid: false,
+      error: 'API key appears to be invalid (too short).',
+    };
+  }
+  
+  return { valid: true };
+}

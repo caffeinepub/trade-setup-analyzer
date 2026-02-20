@@ -16,11 +16,13 @@ import ProfileSetupModal from './components/auth/ProfileSetupModal';
 import DisclaimerGate from './components/DisclaimerGate';
 import CsvUploadPanel from './components/CsvUploadPanel';
 import HistoryPanel from './components/history/HistoryPanel';
+import DiagnosticPanel from './components/DiagnosticPanel';
 import { validateNumericInput, validateRequired } from './lib/validation';
 import { computePotentialProfit, computePotentialLoss, formatCurrency, formatPercentage } from './lib/tradeMath';
 import { computeIndicatorsFromMarketData } from './lib/indicators';
 import { deriveTradeInputs } from './lib/marketData/deriveTradeInputs';
-import { TrendingUp, AlertTriangle, DollarSign, Target, Shield, RefreshCw, Activity, Clock, Timer } from 'lucide-react';
+import { hasUrlParam } from './lib/urlParams';
+import { TrendingUp, AlertTriangle, DollarSign, Target, Shield, RefreshCw, Activity, Clock, Timer, Wifi, WifiOff } from 'lucide-react';
 import type { IndicatorData } from './lib/indicators';
 
 export default function App() {
@@ -31,6 +33,7 @@ export default function App() {
 
   const isAuthenticated = !!identity;
   const showProfileSetup = isAuthenticated && !profileLoading && isFetched && userProfile === null;
+  const debugMode = hasUrlParam('debug', 'market-data');
 
   // Form state
   const [ticker, setTicker] = useState('');
@@ -166,6 +169,109 @@ export default function App() {
   // Determine if fetch/refresh should be disabled
   const isFetchDisabled = marketData.isLoading || marketData.isCooldown;
 
+  // Render error message based on error type
+  const renderErrorMessage = () => {
+    if (!marketData.error) return null;
+
+    const { errorCode, error: errorMessage } = marketData.error;
+
+    switch (errorCode) {
+      case 'rate_limit':
+        return (
+          <Alert className="border-warning/50 bg-warning/10">
+            <Timer className="h-4 w-4 text-warning" />
+            <AlertDescription className="text-warning">
+              <div className="font-medium">Rate limit reached. Retrying in {marketData.cooldownSecondsRemaining}s...</div>
+              <div className="text-xs mt-1 opacity-80">
+                The app will automatically retry when the cooldown expires.
+              </div>
+            </AlertDescription>
+          </Alert>
+        );
+
+      case 'invalid_ticker':
+        return (
+          <Alert variant="destructive">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertDescription>
+              <div className="font-medium">{errorMessage}</div>
+              <div className="text-xs mt-1 opacity-80">
+                Please verify the ticker symbol is correct (e.g., AAPL, MSFT, GOOGL).
+              </div>
+            </AlertDescription>
+          </Alert>
+        );
+
+      case 'network_error':
+        return (
+          <Alert variant="destructive">
+            <WifiOff className="h-4 w-4" />
+            <AlertDescription>
+              <div className="font-medium">Network error: {errorMessage}</div>
+              <div className="text-xs mt-1 opacity-80">
+                Please check your internet connection and try again.
+              </div>
+            </AlertDescription>
+          </Alert>
+        );
+
+      case 'timeout':
+        return (
+          <Alert variant="destructive">
+            <Clock className="h-4 w-4" />
+            <AlertDescription>
+              <div className="font-medium">Request timed out</div>
+              <div className="text-xs mt-1 opacity-80">
+                The request took too long to complete. Please check your connection and try again.
+              </div>
+            </AlertDescription>
+          </Alert>
+        );
+
+      case 'no_data':
+        return (
+          <Alert variant="destructive">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertDescription>
+              <div className="font-medium">No data available for this ticker</div>
+              <div className="text-xs mt-1 opacity-80">
+                The ticker may be delisted, or data is not available from the provider.
+              </div>
+            </AlertDescription>
+          </Alert>
+        );
+
+      case 'config_error':
+        return (
+          <Alert variant="destructive">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertDescription>
+              <div className="font-medium">Configuration error: {errorMessage}</div>
+              <div className="text-xs mt-1 opacity-80">
+                Please check the API key configuration.
+              </div>
+            </AlertDescription>
+          </Alert>
+        );
+
+      case 'api_error':
+      default:
+        return (
+          <Alert variant="destructive">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertDescription>
+              <div className="font-medium">{errorMessage}</div>
+              {marketData.error.rawResponse && (
+                <div className="text-xs mt-1 opacity-80 font-mono">
+                  {marketData.error.rawResponse}
+                </div>
+              )}
+            </AlertDescription>
+          </Alert>
+        );
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background relative overflow-hidden">
       {/* Background illustration */}
@@ -273,7 +379,7 @@ export default function App() {
                           <div className="space-y-2">
                             {marketData.isSuccess && marketData.data && (
                               <Alert className="border-success/50 bg-success/10">
-                                <Activity className="h-4 w-4 text-success" />
+                                <Wifi className="h-4 w-4 text-success" />
                                 <AlertDescription className="text-success">
                                   <div className="flex items-center justify-between">
                                     <div>
@@ -312,24 +418,7 @@ export default function App() {
                               </Alert>
                             )}
 
-                            {marketData.isCooldown && (
-                              <Alert className="border-warning/50 bg-warning/10">
-                                <Timer className="h-4 w-4 text-warning" />
-                                <AlertDescription className="text-warning">
-                                  <div className="font-medium">Rate limit reached. Retrying in {marketData.cooldownSecondsRemaining}s...</div>
-                                  <div className="text-xs mt-1 opacity-80">
-                                    The app will automatically retry when the cooldown expires.
-                                  </div>
-                                </AlertDescription>
-                              </Alert>
-                            )}
-
-                            {marketData.isError && !marketData.isCooldown && (
-                              <Alert variant="destructive">
-                                <AlertTriangle className="h-4 w-4" />
-                                <AlertDescription>{marketData.error}</AlertDescription>
-                              </Alert>
-                            )}
+                            {(marketData.isError || marketData.isCooldown) && renderErrorMessage()}
                           </div>
                         )}
 
@@ -414,16 +503,6 @@ export default function App() {
                           )}
                         </div>
 
-                        {isDataDerived && (
-                          <Alert className="border-primary/50 bg-primary/10">
-                            <Activity className="h-4 w-4 text-primary" />
-                            <AlertDescription className="text-primary text-sm">
-                              Trade levels auto-populated from live market data and technical indicators.
-                              You can adjust these values manually.
-                            </AlertDescription>
-                          </Alert>
-                        )}
-
                         <Button
                           onClick={handleAnalyze}
                           disabled={isPending || !disclaimerAcknowledged}
@@ -437,21 +516,45 @@ export default function App() {
                             </>
                           ) : (
                             <>
-                              <Target className="h-4 w-4 mr-2" />
+                              <TrendingUp className="h-4 w-4 mr-2" />
                               Analyze Trade Setup
                             </>
                           )}
                         </Button>
+
+                        {error && (
+                          <Alert variant="destructive">
+                            <AlertTriangle className="h-4 w-4" />
+                            <AlertDescription>
+                              {error instanceof Error ? error.message : 'Failed to analyze trade'}
+                            </AlertDescription>
+                          </Alert>
+                        )}
                       </CardContent>
                     </Card>
 
                     {/* CSV Upload Panel */}
-                    <CsvUploadPanel onIndicatorsComputed={(csvIndicators) => {
-                      // Only update indicators if no live data is present
-                      if (!marketData.isSuccess) {
-                        setIndicators(csvIndicators);
-                      }
-                    }} />
+                    <CsvUploadPanel
+                      onDataLoaded={(data, computedIndicators) => {
+                        setTicker(data.ticker || '');
+                        setIndicators(computedIndicators);
+                        const derived = deriveTradeInputs(
+                          {
+                            ticker: data.ticker || '',
+                            latestPrice: data.pricePoints[data.pricePoints.length - 1].close,
+                            timestamp: data.pricePoints[data.pricePoints.length - 1].timestamp,
+                            isRealtime: false,
+                            pricePoints: data.pricePoints,
+                            provider: 'CSV Upload',
+                          },
+                          computedIndicators
+                        );
+                        setEntryPrice(derived.entryPrice.toFixed(2));
+                        setStopLossPrice(derived.stopLoss.toFixed(2));
+                        setTakeProfitPrice(derived.takeProfit.toFixed(2));
+                        setIsDataDerived(true);
+                      }}
+                    />
                   </div>
 
                   {/* Results Panel */}
@@ -462,99 +565,83 @@ export default function App() {
                           <CardHeader>
                             <CardTitle className="flex items-center gap-2">
                               <Target className="h-5 w-5" />
-                              Trade Setup Results
+                              Position Sizing
                             </CardTitle>
-                            <CardDescription>
-                              Calculated position size and risk/reward analysis
-                            </CardDescription>
+                            <CardDescription>Calculated based on your risk parameters</CardDescription>
                           </CardHeader>
                           <CardContent className="space-y-4">
-                            {direction && (
-                              <div className="flex items-center gap-2">
-                                <span className="text-sm text-muted-foreground">Direction:</span>
-                                <Badge
-                                  variant={direction === 'LONG' ? 'default' : 'secondary'}
-                                  className="font-mono"
-                                >
+                            <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
+                              <div>
+                                <p className="text-sm text-muted-foreground">Position Size</p>
+                                <p className="text-2xl font-bold">{result.positionSize.toFixed(2)} shares</p>
+                              </div>
+                              {direction && (
+                                <Badge variant={direction === 'LONG' ? 'default' : 'secondary'} className="text-sm">
                                   {direction}
                                 </Badge>
-                              </div>
-                            )}
+                              )}
+                            </div>
 
                             <div className="grid grid-cols-2 gap-4">
-                              <div className="space-y-1">
-                                <div className="text-sm text-muted-foreground flex items-center gap-1">
-                                  <DollarSign className="h-3 w-3" />
-                                  Position Size
-                                </div>
-                                <div className="text-2xl font-bold font-mono">
-                                  {result.positionSize.toFixed(2)}
-                                </div>
-                                <div className="text-xs text-muted-foreground">shares</div>
+                              <div className="p-4 bg-success/10 border border-success/20 rounded-lg">
+                                <p className="text-xs text-muted-foreground mb-1">Risk/Reward Ratio</p>
+                                <p className="text-xl font-bold text-success">
+                                  1:{result.riskRewardRatio.toFixed(2)}
+                                </p>
                               </div>
 
-                              <div className="space-y-1">
-                                <div className="text-sm text-muted-foreground flex items-center gap-1">
-                                  <TrendingUp className="h-3 w-3" />
-                                  Risk/Reward
-                                </div>
-                                <div className="text-2xl font-bold font-mono">
-                                  {result.riskRewardRatio.toFixed(2)}
-                                </div>
-                                <div className="text-xs text-muted-foreground">ratio</div>
+                              <div className="p-4 bg-muted/50 rounded-lg">
+                                <p className="text-xs text-muted-foreground mb-1">Risk Amount</p>
+                                <p className="text-xl font-bold">{formatCurrency(parseFloat(riskAmount))}</p>
                               </div>
                             </div>
+                          </CardContent>
+                        </Card>
 
-                            <Separator />
-
-                            <div className="space-y-3">
-                              <div className="flex items-center justify-between p-3 rounded-lg bg-success/10 border border-success/20">
-                                <div className="flex items-center gap-2">
-                                  <Target className="h-4 w-4 text-success" />
-                                  <span className="text-sm font-medium text-success">
-                                    Potential Profit
-                                  </span>
-                                </div>
-                                <div className="text-right">
-                                  <div className="font-bold font-mono text-success">
-                                    {formatCurrency(potentialProfit || 0)}
-                                  </div>
-                                  {profitPercentage !== null && (
-                                    <div className="text-xs text-success/70">
-                                      {formatPercentage(profitPercentage)}
-                                    </div>
-                                  )}
-                                </div>
+                        <Card>
+                          <CardHeader>
+                            <CardTitle className="flex items-center gap-2">
+                              <DollarSign className="h-5 w-5" />
+                              Profit & Loss Projections
+                            </CardTitle>
+                            <CardDescription>Potential outcomes at target levels</CardDescription>
+                          </CardHeader>
+                          <CardContent className="space-y-4">
+                            <div className="p-4 bg-success/10 border border-success/20 rounded-lg">
+                              <div className="flex items-center justify-between mb-2">
+                                <p className="text-sm font-medium text-success">Potential Profit (Take Profit)</p>
+                                <Badge variant="outline" className="text-success border-success/30">
+                                  {profitPercentage ? `+${formatPercentage(profitPercentage)}` : 'N/A'}
+                                </Badge>
                               </div>
-
-                              <div className="flex items-center justify-between p-3 rounded-lg bg-destructive/10 border border-destructive/20">
-                                <div className="flex items-center gap-2">
-                                  <Shield className="h-4 w-4 text-destructive" />
-                                  <span className="text-sm font-medium text-destructive">
-                                    Potential Loss
-                                  </span>
-                                </div>
-                                <div className="text-right">
-                                  <div className="font-bold font-mono text-destructive">
-                                    {formatCurrency(potentialLoss || 0)}
-                                  </div>
-                                  {lossPercentage !== null && (
-                                    <div className="text-xs text-destructive/70">
-                                      {formatPercentage(lossPercentage)}
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-
-                            <Separator />
-
-                            <div className="space-y-2">
-                              <h4 className="text-sm font-medium">Explanation</h4>
-                              <p className="text-sm text-muted-foreground leading-relaxed">
-                                {result.explanation}
+                              <p className="text-2xl font-bold text-success">
+                                {potentialProfit ? formatCurrency(potentialProfit) : 'N/A'}
                               </p>
                             </div>
+
+                            <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-lg">
+                              <div className="flex items-center justify-between mb-2">
+                                <p className="text-sm font-medium text-destructive">Potential Loss (Stop Loss)</p>
+                                <Badge variant="outline" className="text-destructive border-destructive/30">
+                                  {lossPercentage ? formatPercentage(lossPercentage) : 'N/A'}
+                                </Badge>
+                              </div>
+                              <p className="text-2xl font-bold text-destructive">
+                                {potentialLoss ? formatCurrency(potentialLoss) : 'N/A'}
+                              </p>
+                            </div>
+                          </CardContent>
+                        </Card>
+
+                        <Card>
+                          <CardHeader>
+                            <CardTitle className="flex items-center gap-2">
+                              <Shield className="h-5 w-5" />
+                              Explanation
+                            </CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                            <p className="text-sm text-muted-foreground leading-relaxed">{result.explanation}</p>
                           </CardContent>
                         </Card>
 
@@ -566,52 +653,40 @@ export default function App() {
                                 Technical Indicators
                               </CardTitle>
                               <CardDescription>
-                                Computed from recent price data
+                                {isDataDerived && 'Used to auto-populate trade levels'}
                               </CardDescription>
                             </CardHeader>
                             <CardContent className="space-y-3">
-                              <div className="grid grid-cols-2 gap-4">
-                                {indicators.sma20 !== undefined && (
-                                  <div className="space-y-1">
-                                    <div className="text-sm text-muted-foreground">20-day SMA</div>
-                                    <div className="text-lg font-mono font-semibold">
-                                      ${indicators.sma20.toFixed(2)}
-                                    </div>
-                                  </div>
-                                )}
-                                {indicators.support !== undefined && (
-                                  <div className="space-y-1">
-                                    <div className="text-sm text-muted-foreground">Support</div>
-                                    <div className="text-lg font-mono font-semibold text-destructive">
-                                      ${indicators.support.toFixed(2)}
-                                    </div>
-                                  </div>
-                                )}
-                                {indicators.resistance !== undefined && (
-                                  <div className="space-y-1">
-                                    <div className="text-sm text-muted-foreground">Resistance</div>
-                                    <div className="text-lg font-mono font-semibold text-success">
-                                      ${indicators.resistance.toFixed(2)}
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
+                              {indicators.sma20 && (
+                                <div className="flex justify-between text-sm">
+                                  <span className="text-muted-foreground">20-period SMA:</span>
+                                  <span className="font-mono">${indicators.sma20.toFixed(2)}</span>
+                                </div>
+                              )}
+                              {indicators.support && (
+                                <div className="flex justify-between text-sm">
+                                  <span className="text-muted-foreground">Support Level:</span>
+                                  <span className="font-mono text-success">${indicators.support.toFixed(2)}</span>
+                                </div>
+                              )}
+                              {indicators.resistance && (
+                                <div className="flex justify-between text-sm">
+                                  <span className="text-muted-foreground">Resistance Level:</span>
+                                  <span className="font-mono text-destructive">${indicators.resistance.toFixed(2)}</span>
+                                </div>
+                              )}
                             </CardContent>
                           </Card>
                         )}
                       </>
                     )}
-
-                    {error && (
-                      <Alert variant="destructive">
-                        <AlertTriangle className="h-4 w-4" />
-                        <AlertDescription>
-                          {error instanceof Error ? error.message : 'An error occurred during analysis'}
-                        </AlertDescription>
-                      </Alert>
-                    )}
                   </div>
                 </div>
+
+                {/* Diagnostic Panel */}
+                {debugMode && marketData.diagnostics && (
+                  <DiagnosticPanel data={marketData.diagnostics} />
+                )}
               </TabsContent>
 
               <TabsContent value="history">
@@ -623,38 +698,40 @@ export default function App() {
               <CardHeader>
                 <CardTitle>Welcome to Trade Setup Analyzer</CardTitle>
                 <CardDescription>
-                  An educational tool for analyzing trade setups with risk/reward calculations
+                  An educational tool for analyzing trade setups with risk management calculations
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <p className="text-muted-foreground">
-                  Please log in to access the trade analyzer and save your analysis history.
+                <p className="text-sm text-muted-foreground">
+                  Please log in with Internet Identity to access the trade analyzer and save your analysis history.
                 </p>
-                <LoginButton />
+                <div className="flex justify-center pt-4">
+                  <LoginButton />
+                </div>
               </CardContent>
             </Card>
           )}
         </main>
 
         {/* Footer */}
-        <footer className="border-t border-border/40 mt-16 py-8">
-          <div className="container mx-auto px-4 text-center text-sm text-muted-foreground">
-            <p>
-              © {new Date().getFullYear()} Trade Setup Analyzer. Built with ❤️ using{' '}
-              <a
-                href={`https://caffeine.ai/?utm_source=Caffeine-footer&utm_medium=referral&utm_content=${encodeURIComponent(
-                  typeof window !== 'undefined' ? window.location.hostname : 'trade-setup-analyzer'
-                )}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-primary hover:underline"
-              >
-                caffeine.ai
-              </a>
-            </p>
-            <p className="mt-2 text-xs">
-              Educational purposes only. Not financial advice. Always do your own research.
-            </p>
+        <footer className="border-t border-border/40 mt-16">
+          <div className="container mx-auto px-4 py-6">
+            <div className="flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-muted-foreground">
+              <p>© {new Date().getFullYear()} Trade Setup Analyzer. Educational purposes only.</p>
+              <p>
+                Built with ❤️ using{' '}
+                <a
+                  href={`https://caffeine.ai/?utm_source=Caffeine-footer&utm_medium=referral&utm_content=${encodeURIComponent(
+                    typeof window !== 'undefined' ? window.location.hostname : 'trade-analyzer'
+                  )}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-primary hover:underline"
+                >
+                  caffeine.ai
+                </a>
+              </p>
+            </div>
           </div>
         </footer>
       </div>
