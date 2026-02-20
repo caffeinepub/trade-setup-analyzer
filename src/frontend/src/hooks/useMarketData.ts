@@ -19,6 +19,8 @@ export interface MarketDataState {
   diagnostics?: DiagnosticData;
 }
 
+const MAX_TOTAL_RETRY_DURATION_MS = 120_000; // 2 minutes
+
 export function useMarketData() {
   const [state, setState] = useState<MarketDataState>({
     status: 'idle',
@@ -30,6 +32,7 @@ export function useMarketData() {
 
   const cooldownIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const currentTickerRef = useRef<string>('');
+  const retryStartTimeRef = useRef<number | null>(null);
   const debugMode = hasUrlParam('debug', 'market-data');
 
   // Cleanup cooldown interval on unmount
@@ -52,12 +55,11 @@ export function useMarketData() {
       const remaining = Math.max(0, Math.ceil((nextRetryTime - now) / 1000));
 
       if (remaining <= 0) {
-        // Cooldown expired, trigger retry
+        // Cooldown expired, clear interval
         if (cooldownIntervalRef.current) {
           clearInterval(cooldownIntervalRef.current);
           cooldownIntervalRef.current = null;
         }
-        // The retry will be triggered by scheduleRetry
       } else {
         setState(prev => ({
           ...prev,
@@ -94,6 +96,7 @@ export function useMarketData() {
     }
 
     currentTickerRef.current = ticker;
+    retryStartTimeRef.current = Date.now(); // Track when retry sequence started
 
     setState(prev => ({
       ...prev,
@@ -115,59 +118,102 @@ export function useMarketData() {
       const retryState = marketDataClient.getRetryState(ticker);
       
       if (retryState && retryState.nextRetryTime) {
+        const cooldownSeconds = Math.ceil((retryState.nextRetryTime - Date.now()) / 1000);
+        
         setState({
           status: 'cooldown',
           data: null,
           error: result,
           lastRefreshTime: new Date(),
-          cooldownSecondsRemaining: Math.ceil((retryState.nextRetryTime - Date.now()) / 1000),
+          cooldownSecondsRemaining: cooldownSeconds,
           diagnostics: debugMode ? marketDataClient.getDiagnostics() : undefined,
         });
 
         // Start cooldown timer
         startCooldownTimer(ticker, retryState.nextRetryTime);
 
-        // Schedule automatic retry
+        // Schedule automatic retry with timeout check
         marketDataClient.scheduleRetry(ticker, (retryResult) => {
           // Only update if still on the same ticker
-          if (currentTickerRef.current === ticker) {
-            if (isErrorResult(retryResult)) {
-              if (retryResult.isRateLimited) {
-                // Still rate limited, continue cooldown
-                const newRetryState = marketDataClient.getRetryState(ticker);
-                if (newRetryState && newRetryState.nextRetryTime) {
-                  setState({
-                    status: 'cooldown',
-                    data: null,
-                    error: retryResult,
-                    lastRefreshTime: new Date(),
-                    cooldownSecondsRemaining: Math.ceil((newRetryState.nextRetryTime - Date.now()) / 1000),
-                    diagnostics: debugMode ? marketDataClient.getDiagnostics() : undefined,
-                  });
-                  startCooldownTimer(ticker, newRetryState.nextRetryTime);
-                }
-              } else {
-                // Different error
+          if (currentTickerRef.current !== ticker) {
+            return;
+          }
+
+          // Check if total retry duration exceeded
+          const elapsedTime = Date.now() - (retryStartTimeRef.current || 0);
+          if (elapsedTime > MAX_TOTAL_RETRY_DURATION_MS) {
+            setState({
+              status: 'error',
+              data: null,
+              error: {
+                ticker,
+                error: 'Rate limit retries exhausted. Please try again later.',
+                provider: 'Alpha Vantage',
+                errorCode: 'rate_limit',
+                isRateLimited: false,
+              },
+              lastRefreshTime: new Date(),
+              cooldownSecondsRemaining: null,
+              diagnostics: debugMode ? marketDataClient.getDiagnostics() : undefined,
+            });
+            retryStartTimeRef.current = null;
+            return;
+          }
+
+          if (isErrorResult(retryResult)) {
+            if (retryResult.isRateLimited) {
+              // Check if max retries exhausted
+              const newRetryState = marketDataClient.getRetryState(ticker);
+              if (!newRetryState || !newRetryState.nextRetryTime) {
+                // Max retries exhausted
                 setState({
                   status: 'error',
                   data: null,
-                  error: retryResult,
+                  error: {
+                    ...retryResult,
+                    error: 'Rate limit retries exhausted. Please try again later.',
+                  },
                   lastRefreshTime: new Date(),
                   cooldownSecondsRemaining: null,
                   diagnostics: debugMode ? marketDataClient.getDiagnostics() : undefined,
                 });
+                retryStartTimeRef.current = null;
+              } else {
+                // Still rate limited, continue cooldown
+                const newCooldownSeconds = Math.ceil((newRetryState.nextRetryTime - Date.now()) / 1000);
+                setState({
+                  status: 'cooldown',
+                  data: null,
+                  error: retryResult,
+                  lastRefreshTime: new Date(),
+                  cooldownSecondsRemaining: newCooldownSeconds,
+                  diagnostics: debugMode ? marketDataClient.getDiagnostics() : undefined,
+                });
+                startCooldownTimer(ticker, newRetryState.nextRetryTime);
               }
             } else {
-              // Success
+              // Different error
               setState({
-                status: 'success',
-                data: retryResult,
-                error: null,
+                status: 'error',
+                data: null,
+                error: retryResult,
                 lastRefreshTime: new Date(),
                 cooldownSecondsRemaining: null,
                 diagnostics: debugMode ? marketDataClient.getDiagnostics() : undefined,
               });
+              retryStartTimeRef.current = null;
             }
+          } else {
+            // Success
+            setState({
+              status: 'success',
+              data: retryResult,
+              error: null,
+              lastRefreshTime: new Date(),
+              cooldownSecondsRemaining: null,
+              diagnostics: debugMode ? marketDataClient.getDiagnostics() : undefined,
+            });
+            retryStartTimeRef.current = null;
           }
         });
       }
@@ -184,6 +230,7 @@ export function useMarketData() {
         cooldownSecondsRemaining: null,
         diagnostics: debugMode ? marketDataClient.getDiagnostics() : undefined,
       });
+      retryStartTimeRef.current = null;
       return;
     }
 
@@ -196,6 +243,7 @@ export function useMarketData() {
       cooldownSecondsRemaining: null,
       diagnostics: debugMode ? marketDataClient.getDiagnostics() : undefined,
     });
+    retryStartTimeRef.current = null;
   }, [startCooldownTimer, debugMode]);
 
   return {

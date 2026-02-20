@@ -1,98 +1,67 @@
 {
   "kind": "build_request",
-  "title": "Diagnose and fix market data fetch failures",
+  "title": "Fix infinite rate-limit retry loop",
+  "projectName": "Trade Setup Analyzer",
   "priority": "high",
   "requirements": [
     {
-      "id": "REQ-16",
-      "text": "Add comprehensive logging to the market data fetch pipeline in frontend/src/lib/marketData/fetchMarketData.ts and frontend/src/lib/marketData/marketDataClient.ts to capture: raw API response status, response body, parsed result or error type, cache hits/misses, retry attempts, and backoff delays. Log at debug level so issues can be diagnosed without exposing sensitive data.",
+      "id": "REQ-21",
+      "text": "Fix the rate-limit retry loop in frontend/src/hooks/useMarketData.ts so it stops repeating the same 'rate limit reached, retrying in 1s...' message indefinitely. Ensure the retry logic respects the exponential backoff schedule (10s, 30s, 60s) and stops after reaching the maximum retry attempts (3) instead of looping forever.",
       "target": "frontend",
       "source": {
         "messageIds": [
-          "msg-last"
+          "msg-11"
         ],
         "quotes": [
-          "the app is having trouble fetching the data. can you fix it..."
+          "rate limit reached,  retrying in 1s...it keep repeating that message"
         ]
       },
       "acceptanceCriteria": [
-        "Console logs show the full request/response flow for each market data fetch attempt",
-        "Error messages include the specific failure reason (network, API error, parse failure, rate limit)",
-        "Cache behavior is visible in logs (hit/miss, TTL remaining)"
+        "The retry message updates with increasing delays (10s, 30s, 60s) instead of always showing '1s'",
+        "After 3 failed attempts, the retry loop stops and shows a final error state",
+        "The cooldown timer in the UI reflects the actual backoff delay from the policy",
+        "No infinite retry loops occur when rate limits are hit"
       ]
     },
     {
-      "id": "REQ-17",
-      "text": "Validate that the Alpha Vantage API key is correctly loaded from frontend/src/lib/marketData/config.ts and that the constructed request URL matches the provider's expected format. Add a fallback error message if the API key is missing or malformed.",
+      "id": "REQ-22",
+      "text": "Update the retry state management in frontend/src/lib/marketData/marketDataClient.ts to correctly track and increment the current attempt count across retries, and ensure the backoff delay calculation uses the actual attempt number rather than a fixed value.",
       "target": "frontend",
       "source": {
         "messageIds": [
-          "msg-last"
+          "msg-11"
         ]
       },
       "acceptanceCriteria": [
-        "API key presence is checked before making requests",
-        "User sees a clear error message if the API key is missing or invalid",
-        "Request URL construction is logged for verification"
+        "The retry attempt counter increments correctly (0, 1, 2, 3)",
+        "Each retry uses the backoff delay corresponding to its attempt number",
+        "Diagnostic data shows accurate retry history with correct attempt numbers and delays"
       ]
     },
     {
-      "id": "REQ-18",
-      "text": "Add error recovery logic in frontend/src/hooks/useMarketData.ts to handle common failure modes: network timeouts (increase fetch timeout or add retry), unexpected response formats (log the raw response and show a user-friendly error), and missing or empty data arrays (show 'No data available for this ticker').",
+      "id": "REQ-23",
+      "text": "Add timeout logic to frontend/src/hooks/useMarketData.ts so that if the retry loop exceeds a maximum total duration (e.g., 2 minutes), it exits gracefully with a clear error message indicating that retries have been exhausted.",
       "target": "frontend",
       "source": {
         "messageIds": [
-          "msg-last"
+          "msg-11"
         ]
       },
       "acceptanceCriteria": [
-        "Network timeouts trigger automatic retry with exponential backoff",
-        "Unexpected response formats are logged and display a clear error to the user",
-        "Empty or missing data shows a specific 'No data available' message instead of a generic error"
-      ]
-    },
-    {
-      "id": "REQ-19",
-      "text": "Improve error display in frontend/src/App.tsx to show more specific guidance based on the error type returned by useMarketData: rate limit errors show cooldown timer and retry info, invalid ticker errors suggest checking the symbol, network errors prompt the user to check connectivity, and API errors display the provider's message if available.",
-      "target": "frontend",
-      "source": {
-        "messageIds": [
-          "msg-last"
-        ]
-      },
-      "acceptanceCriteria": [
-        "Rate limit errors display the cooldown timer and next retry time",
-        "Invalid ticker errors suggest verifying the symbol",
-        "Network errors include connectivity troubleshooting guidance",
-        "API-specific errors show the provider's error message when available"
-      ]
-    },
-    {
-      "id": "REQ-20",
-      "text": "Add a developer-friendly diagnostic mode (enabled via URL parameter ?debug=market-data) that exposes: last request details, raw API response, cache state, retry history, and backoff schedule in a collapsible panel at the bottom of the Analyzer tab.",
-      "target": "frontend",
-      "source": {
-        "messageIds": [
-          "msg-last"
-        ]
-      },
-      "acceptanceCriteria": [
-        "Appending ?debug=market-data to the URL enables the diagnostic panel",
-        "Panel shows last request URL, response status, raw response body, and error details",
-        "Cache state (entries, TTL, hits/misses) is visible",
-        "Retry history and backoff schedule are displayed"
+        "If retries continue beyond 2 minutes total, the loop terminates",
+        "A clear error message is shown: 'Rate limit retries exhausted. Please try again later.'",
+        "The user can manually trigger a new fetch attempt after the timeout"
       ]
     }
   ],
   "constraints": [
-    "Do not modify backend/main.mo; market data fetching is entirely frontend-side",
-    "Preserve existing rate-limit handling logic and retry mechanism in marketDataClient.ts",
-    "Do not expose the Alpha Vantage API key in logs or error messages"
+    "Do not modify the exponential backoff policy constants in frontend/src/lib/marketData/marketDataPolicy.ts",
+    "Preserve existing rate-limit detection logic in frontend/src/lib/marketData/fetchMarketData.ts"
   ],
   "nonGoals": [
-    "Switching to a different market data provider",
-    "Adding user-configurable API keys",
-    "Implementing server-side data fetching or caching"
+    "Changing the Alpha Vantage API provider or switching to a different data source",
+    "Modifying the maximum retry limit or backoff delays",
+    "Adding user controls to configure retry behavior"
   ],
   "imageRequirements": {
     "required": [],

@@ -1,6 +1,6 @@
 {
   "schemaVersion": "1.0.0",
-  "projectStateVersion": 9,
+  "projectStateVersion": 11,
   "summary": "Build an HTML5 web app where a user inputs a stock ticker/symbol and the app pulls live market data to analyze it and propose a trade setup (entry, stop loss, take profit) and potential earnings, rather than requiring the user to manually supply those values.",
   "architectural_notes": [
     "Add live market-data integration (choose provider/API), including rate-limiting, error handling, and caching/fallback behavior when data is unavailable.",
@@ -9,7 +9,8 @@
   "known_issues": [
     "Current UI requests manual analysis inputs (e.g., current price/swing levels), but user expectation is that the app derives these from the ticker via live data analysis.",
     "Live market-data API rate limit is being reached (provider blocks further requests temporarily), causing the app to fail fetching prices until the limit resets.",
-    "App is currently experiencing issues fetching market data; root cause needs investigation (network, API key, provider availability, or response format change)."
+    "App is currently experiencing issues fetching market data; root cause needs investigation (network, API key, provider availability, or response format change).",
+    "Rate-limit retry loop is repeating indefinitely with the same delay message instead of applying exponential backoff; retry logic may be broken or backoff parameters set too low."
   ],
   "isFixRequest": true,
   "existing_features": [
@@ -162,6 +163,30 @@
       "title": "Add a developer-friendly diagnostic mode (enabled via URL parameter ?debug=market-data) that exposes: last request details, raw API response, cache state, retry history, and backoff schedule in a collapsible panel at the bottom of the Analyzer tab.",
       "reqIds": [
         "REQ-20"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-fix-the-rate-limit-retry-loop-in-frontend-src-hooks-usemarketdata-ts-so-it-stops-repeating-the-same-rate-limit-reached-retrying-in-1s-message-indefinitely-ensure-the-retry-logic-respects-the-exponential-backoff-schedule-10s-30s-60s-and-stops-after-reaching-the-maximum-retry-attempts-3-instead-of-looping-forever",
+      "title": "Fix the rate-limit retry loop in frontend/src/hooks/useMarketData.ts so it stops repeating the same 'rate limit reached, retrying in 1s...' message indefinitely. Ensure the retry logic respects the exponential backoff schedule (10s, 30s, 60s) and stops after reaching the maximum retry attempts (3) instead of looping forever.",
+      "reqIds": [
+        "REQ-21"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-update-the-retry-state-management-in-frontend-src-lib-marketdata-marketdataclient-ts-to-correctly-track-and-increment-the-current-attempt-count-across-retries-and-ensure-the-backoff-delay-calculation-uses-the-actual-attempt-number-rather-than-a-fixed-value",
+      "title": "Update the retry state management in frontend/src/lib/marketData/marketDataClient.ts to correctly track and increment the current attempt count across retries, and ensure the backoff delay calculation uses the actual attempt number rather than a fixed value.",
+      "reqIds": [
+        "REQ-22"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-add-timeout-logic-to-frontend-src-hooks-usemarketdata-ts-so-that-if-the-retry-loop-exceeds-a-maximum-total-duration-e-g-2-minutes-it-exits-gracefully-with-a-clear-error-message-indicating-that-retries-have-been-exhausted",
+      "title": "Add timeout logic to frontend/src/hooks/useMarketData.ts so that if the retry loop exceeds a maximum total duration (e.g., 2 minutes), it exits gracefully with a clear error message indicating that retries have been exhausted.",
+      "reqIds": [
+        "REQ-23"
       ],
       "version": 1
     }

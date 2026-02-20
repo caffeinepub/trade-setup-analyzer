@@ -200,11 +200,17 @@ class MarketDataClient {
   }
 
   private async handleRateLimit(ticker: string, error: MarketDataError): Promise<MarketDataError> {
-    const retryState = this.retryStates.get(ticker) || {
-      attemptCount: 0,
-      nextRetryTime: null,
-      timeoutId: null,
-    };
+    let retryState = this.retryStates.get(ticker);
+    
+    if (!retryState) {
+      // Initialize retry state
+      retryState = {
+        attemptCount: 0,
+        nextRetryTime: null,
+        timeoutId: null,
+      };
+      this.retryStates.set(ticker, retryState);
+    }
 
     retryState.attemptCount += 1;
     log('Rate limit retry attempt', retryState.attemptCount, 'of', MAX_RETRIES, 'for', ticker);
@@ -216,14 +222,16 @@ class MarketDataClient {
       return {
         ...error,
         error: 'Rate limit reached. Please wait a few minutes before trying again.',
+        isRateLimited: false, // Mark as not rate limited anymore to stop retry loop
       };
     }
 
+    // Calculate backoff delay using the current attempt count
     const delay = calculateBackoffDelay(retryState.attemptCount);
     retryState.nextRetryTime = Date.now() + delay;
     this.retryStates.set(ticker, retryState);
     
-    log('Scheduled retry for', ticker, 'in', Math.round(delay / 1000), 's (backoff delay)');
+    log('Scheduled retry for', ticker, 'in', Math.round(delay / 1000), 's (attempt', retryState.attemptCount, ')');
 
     // Return error with retry info (the hook will handle the UI)
     return error;
@@ -241,6 +249,12 @@ class MarketDataClient {
       return;
     }
 
+    // Check if already exhausted retries
+    if (retryState.attemptCount > MAX_RETRIES) {
+      log('Max retries already exhausted for', normalizedTicker);
+      return;
+    }
+
     const delay = Math.max(0, retryState.nextRetryTime - Date.now());
     log('Scheduling retry for', normalizedTicker, 'in', Math.round(delay / 1000), 's');
 
@@ -250,9 +264,38 @@ class MarketDataClient {
     }
 
     retryState.timeoutId = setTimeout(async () => {
-      log('Executing scheduled retry for', normalizedTicker);
-      const result = await this.fetch(normalizedTicker);
-      onRetry(result);
+      log('Executing scheduled retry for', normalizedTicker, '(attempt', retryState.attemptCount, ')');
+      
+      // Execute the retry by calling executeRequest directly to avoid incrementing attempt count again
+      try {
+        const result = await this.executeRequest(normalizedTicker);
+        
+        // Type guard for error result
+        const isErrorResult = (r: MarketDataResult | MarketDataError): r is MarketDataError => {
+          return 'error' in r;
+        };
+
+        if (isErrorResult(result) && result.isRateLimited) {
+          // Still rate limited, handle it
+          const updatedError = await this.handleRateLimit(normalizedTicker, result);
+          onRetry(updatedError);
+        } else if (isErrorResult(result)) {
+          // Different error
+          this.clearRetryState(normalizedTicker);
+          onRetry(result);
+        } else {
+          // Success
+          this.cache.set(normalizedTicker, {
+            result,
+            timestamp: Date.now(),
+          });
+          this.clearRetryState(normalizedTicker);
+          onRetry(result);
+        }
+      } catch (error) {
+        log('Retry failed with exception for', normalizedTicker, ':', error);
+        this.clearRetryState(normalizedTicker);
+      }
     }, delay);
 
     this.retryStates.set(normalizedTicker, retryState);

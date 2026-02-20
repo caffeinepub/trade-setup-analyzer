@@ -1,13 +1,13 @@
 # Specification
 
 ## Summary
-**Goal:** Diagnose and fix market data fetch failures by adding comprehensive logging, error recovery, and a developer diagnostic mode.
+**Goal:** Fix the infinite rate-limit retry loop that displays repeating "retrying in 1s..." messages and ensure proper exponential backoff behavior.
 
 **Planned changes:**
-- Add detailed logging throughout the market data fetch pipeline to capture API requests, responses, errors, cache behavior, and retry attempts
-- Validate Alpha Vantage API key presence and URL construction with clear error messages for missing or malformed keys
-- Implement error recovery logic for network timeouts, unexpected response formats, and missing data with automatic retry and user-friendly messages
-- Enhance error display in the UI to show specific guidance based on error type (rate limits with cooldown timer, invalid ticker suggestions, network connectivity prompts, API error messages)
-- Add a developer diagnostic mode accessible via URL parameter (?debug=market-data) that displays request details, raw API responses, cache state, retry history, and backoff schedule in a collapsible panel
+- Fix retry state management to correctly track and increment attempt counts across retries
+- Update retry logic to use actual backoff delays (10s, 30s, 60s) instead of fixed 1s intervals
+- Stop retry loop after 3 failed attempts instead of continuing indefinitely
+- Add 2-minute total timeout to gracefully exit if retries exceed maximum duration
+- Ensure UI displays accurate cooldown timers that reflect the actual backoff delays
 
-**User-visible outcome:** Users will see clear, specific error messages when market data fails to load, with actionable guidance based on the error type. Developers can enable diagnostic mode to troubleshoot fetch issues with detailed request/response information and cache state visibility.
+**User-visible outcome:** Rate-limit retry messages will show increasing delays (10s, 30s, 60s), stop after 3 attempts with a clear error message, and never loop indefinitely when hitting API rate limits.

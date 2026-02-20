@@ -1,122 +1,54 @@
 {
   "kind": "implementation_plan",
   "version": "1.0",
-  "title": "Diagnose and fix market data fetch failures",
+  "title": "Fix infinite rate-limit retry loop",
   "requirements": [
     {
-      "id": "REQ-16",
-      "summary": "Add comprehensive logging to market data fetch pipeline to capture raw responses, errors, cache behavior, and retry attempts",
+      "id": "REQ-21",
+      "summary": "Fix the rate-limit retry loop in useMarketData.ts to correctly display exponential backoff delays and stop after maximum retries instead of looping infinitely",
       "acceptanceCriteria": [
-        "Console logs show the full request/response flow for each market data fetch attempt",
-        "Error messages include the specific failure reason (network, API error, parse failure, rate limit)",
-        "Cache behavior is visible in logs (hit/miss, TTL remaining)"
-      ],
-      "file_operations": [
-        {
-          "path": "frontend/src/lib/marketData/fetchMarketData.ts",
-          "operation": "modify",
-          "description": "Add debug-level logging for: request URL construction, raw fetch response status and headers, response body (truncated if large), parsed result structure, error type and details (network, parse, rate limit), and validation failures. Log before and after each major operation without exposing the API key."
-        },
-        {
-          "path": "frontend/src/lib/marketData/marketDataClient.ts",
-          "operation": "modify",
-          "description": "Add debug-level logging for: cache lookups (hit/miss, TTL remaining, entry age), request de-duplication (new request vs. in-flight), spacing delays applied, retry attempts with backoff delay values, and final success or failure status. Include ticker symbol in all log entries for traceability."
-        }
-      ]
-    },
-    {
-      "id": "REQ-17",
-      "summary": "Validate API key presence and request URL format before making requests, with clear error messages for missing or malformed configuration",
-      "acceptanceCriteria": [
-        "API key presence is checked before making requests",
-        "User sees a clear error message if the API key is missing or invalid",
-        "Request URL construction is logged for verification"
-      ],
-      "file_operations": [
-        {
-          "path": "frontend/src/lib/marketData/config.ts",
-          "operation": "modify",
-          "description": "Add a validation function that checks if MARKET_DATA_API_KEY is defined, non-empty, and has a minimum expected length. Export a validateApiKey() function that returns validation status without exposing the key value."
-        },
-        {
-          "path": "frontend/src/lib/marketData/fetchMarketData.ts",
-          "operation": "modify",
-          "description": "Before constructing the request URL, call validateApiKey() and return a structured error if validation fails. Log the constructed URL (with API key masked or omitted) at debug level. Include clear error messages like 'API key is missing or invalid' in the returned MarketDataError."
-        }
-      ]
-    },
-    {
-      "id": "REQ-18",
-      "summary": "Add error recovery logic for network timeouts, unexpected response formats, and missing data with automatic retry and user-friendly messages",
-      "acceptanceCriteria": [
-        "Network timeouts trigger automatic retry with exponential backoff",
-        "Unexpected response formats are logged and display a clear error to the user",
-        "Empty or missing data shows a specific 'No data available' message instead of a generic error"
+        "The retry message updates with increasing delays (10s, 30s, 60s) instead of always showing '1s'",
+        "After 3 failed attempts, the retry loop stops and shows a final error state",
+        "The cooldown timer in the UI reflects the actual backoff delay from the policy",
+        "No infinite retry loops occur when rate limits are hit"
       ],
       "file_operations": [
         {
           "path": "frontend/src/hooks/useMarketData.ts",
           "operation": "modify",
-          "description": "Add timeout handling to the fetch operation (e.g., 10-15 second timeout using AbortController). On timeout, trigger the existing retry mechanism. For empty or missing data arrays in the result, set a specific error message 'No data available for this ticker'. Log raw responses when parse or validation errors occur to aid debugging."
-        },
-        {
-          "path": "frontend/src/lib/marketData/fetchMarketData.ts",
-          "operation": "modify",
-          "description": "Wrap fetch calls with timeout logic using AbortController. Enhance error detection to distinguish between network errors, timeout errors, and parse/validation errors. For unexpected response formats, log the raw response body (first 500 chars) and return a MarketDataError with type 'api_error' and a descriptive message."
-        },
-        {
-          "path": "frontend/src/lib/marketData/types.ts",
-          "operation": "modify",
-          "description": "If not already present, add 'timeout' and 'no_data' to the MarketDataErrorType union to clearly represent these failure modes. Ensure MarketDataError includes an optional rawResponse field for debugging unexpected formats."
+          "description": "Fix retry state management to properly track attempt counts and display correct backoff delays. Update the cooldownRemaining calculation to use the actual backoff delay from the policy instead of a hardcoded 1-second value. Ensure the retry loop terminates after maxRetries (3) is reached by checking the attempt count before scheduling the next retry. Add logic to transition to a final error state when retries are exhausted, preventing infinite loops."
         }
       ]
     },
     {
-      "id": "REQ-19",
-      "summary": "Improve error display in App.tsx with specific guidance for rate limits, invalid tickers, network issues, and API errors",
+      "id": "REQ-22",
+      "summary": "Update retry state management in marketDataClient.ts to correctly track and increment attempt counts, ensuring backoff delays are calculated from the actual attempt number",
       "acceptanceCriteria": [
-        "Rate limit errors display the cooldown timer and next retry time",
-        "Invalid ticker errors suggest verifying the symbol",
-        "Network errors include connectivity troubleshooting guidance",
-        "API-specific errors show the provider's error message when available"
-      ],
-      "file_operations": [
-        {
-          "path": "frontend/src/App.tsx",
-          "operation": "modify",
-          "description": "Replace the current generic error display with a switch or conditional logic based on marketData.error.type. For 'rate_limit', show a message with the cooldown timer and next retry time (derive from retryAfter or cooldownEndsAt). For 'api_error' with invalid ticker indicators, suggest checking the symbol. For 'network', prompt the user to check connectivity. For other API errors, display the provider's message from error.message if available."
-        }
-      ]
-    },
-    {
-      "id": "REQ-20",
-      "summary": "Add a developer diagnostic mode enabled via ?debug=market-data URL parameter showing request details, raw responses, cache state, and retry history",
-      "acceptanceCriteria": [
-        "Appending ?debug=market-data to the URL enables the diagnostic panel",
-        "Panel shows last request URL, response status, raw response body, and error details",
-        "Cache state (entries, TTL, hits/misses) is visible",
-        "Retry history and backoff schedule are displayed"
+        "The retry attempt counter increments correctly (0, 1, 2, 3)",
+        "Each retry uses the backoff delay corresponding to its attempt number",
+        "Diagnostic data shows accurate retry history with correct attempt numbers and delays"
       ],
       "file_operations": [
         {
           "path": "frontend/src/lib/marketData/marketDataClient.ts",
           "operation": "modify",
-          "description": "Extend the client to track diagnostic information: last request details (URL with masked key, timestamp), last response (status, body preview), cache statistics (entries count, hits, misses, TTL per entry), and retry history (attempt count, backoff delays, timestamps). Export a function to retrieve this diagnostic state."
-        },
+          "description": "Fix the retry logic in fetchWithRetry to properly track and increment the currentAttempt counter across retry cycles. Ensure the backoff delay calculation in the retry loop uses the incremented attempt number (currentAttempt + 1) rather than currentAttempt, so that the first retry uses delay[0], second uses delay[1], etc. Update diagnostic tracking to record accurate attempt numbers and corresponding delays in the retry history."
+        }
+      ]
+    },
+    {
+      "id": "REQ-23",
+      "summary": "Add timeout logic to useMarketData.ts to gracefully exit the retry loop if total duration exceeds 2 minutes, displaying a clear error message",
+      "acceptanceCriteria": [
+        "If retries continue beyond 2 minutes total, the loop terminates",
+        "A clear error message is shown: 'Rate limit retries exhausted. Please try again later.'",
+        "The user can manually trigger a new fetch attempt after the timeout"
+      ],
+      "file_operations": [
         {
           "path": "frontend/src/hooks/useMarketData.ts",
           "operation": "modify",
-          "description": "Expose diagnostic data from the marketDataClient in the hook's return value. Include fields for lastRequestDetails, lastResponse, cacheStats, and retryHistory. Check for ?debug=market-data using the urlParams utility and conditionally populate this data."
-        },
-        {
-          "path": "frontend/src/components/DiagnosticPanel.tsx",
-          "operation": "create",
-          "description": "Create a collapsible panel component that accepts diagnostic data (request details, response, cache state, retry history) as props. Display this information in a developer-friendly format with labeled sections, monospace text for URLs/responses, and tables or lists for cache entries and retry attempts. Style it to appear at the bottom of the viewport when enabled."
-        },
-        {
-          "path": "frontend/src/App.tsx",
-          "operation": "modify",
-          "description": "Import urlParams utility and check for ?debug=market-data. If present, import and render the DiagnosticPanel component below the main content in the Analyzer tab, passing in the diagnostic data from useMarketData. Ensure the panel is only visible when the debug parameter is set."
+          "description": "Add a maximum total duration check (2 minutes) to the retry loop. Track the elapsed time from the initial fetch attempt and terminate the retry loop if the total duration exceeds 120 seconds. When the timeout is reached, set the error state to 'Rate limit retries exhausted. Please try again later.' and reset the fetching state to allow the user to manually trigger a new fetch attempt."
         }
       ]
     }

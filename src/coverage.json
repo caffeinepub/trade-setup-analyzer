@@ -1,101 +1,57 @@
 {
   "kind": "coverage_report",
   "version": "1.0",
-  "generatedAt": "2026-02-20T23:13:54.014Z",
+  "generatedAt": "2026-02-20T23:25:56.827Z",
   "sources": {
     "buildRequest": true,
     "implementationPlan": true
   },
   "requirements": {
-    "total": 5,
-    "implemented": 5,
+    "total": 3,
+    "implemented": 3,
     "items": [
       {
-        "id": "REQ-16",
-        "summary": "Add comprehensive logging to the market data fetch pipeline in frontend/src/lib/marketData/fetchMarketData.ts and frontend/src/lib/marketData/marketDataClient.ts to capture: raw API response status, response body, parsed result or error type, cache hits/misses, retry attempts, and backoff delays. Log at debug level so issues can be diagnosed without exposing sensitive data.",
+        "id": "REQ-21",
+        "summary": "Fix the rate-limit retry loop in frontend/src/hooks/useMarketData.ts so it stops repeating the same 'rate limit reached, retrying in 1s...' message indefinitely. Ensure the retry logic respects the exponential backoff schedule (10s, 30s, 60s) and stops after reaching the maximum retry attempts (3) instead of looping forever.",
         "status": "implemented",
         "plannedFiles": [
-          "frontend/src/lib/marketData/fetchMarketData.ts",
+          "frontend/src/hooks/useMarketData.ts"
+        ],
+        "matchedFiles": [
+          "frontend/src/hooks/useMarketData.ts"
+        ]
+      },
+      {
+        "id": "REQ-22",
+        "summary": "Update the retry state management in frontend/src/lib/marketData/marketDataClient.ts to correctly track and increment the current attempt count across retries, and ensure the backoff delay calculation uses the actual attempt number rather than a fixed value.",
+        "status": "implemented",
+        "plannedFiles": [
           "frontend/src/lib/marketData/marketDataClient.ts"
         ],
         "matchedFiles": [
-          "frontend/src/lib/marketData/fetchMarketData.ts",
           "frontend/src/lib/marketData/marketDataClient.ts"
         ]
       },
       {
-        "id": "REQ-17",
-        "summary": "Validate that the Alpha Vantage API key is correctly loaded from frontend/src/lib/marketData/config.ts and that the constructed request URL matches the provider's expected format. Add a fallback error message if the API key is missing or malformed.",
+        "id": "REQ-23",
+        "summary": "Add timeout logic to frontend/src/hooks/useMarketData.ts so that if the retry loop exceeds a maximum total duration (e.g., 2 minutes), it exits gracefully with a clear error message indicating that retries have been exhausted.",
         "status": "implemented",
         "plannedFiles": [
-          "frontend/src/lib/marketData/config.ts",
-          "frontend/src/lib/marketData/fetchMarketData.ts"
+          "frontend/src/hooks/useMarketData.ts"
         ],
         "matchedFiles": [
-          "frontend/src/lib/marketData/config.ts",
-          "frontend/src/lib/marketData/fetchMarketData.ts"
-        ]
-      },
-      {
-        "id": "REQ-18",
-        "summary": "Add error recovery logic in frontend/src/hooks/useMarketData.ts to handle common failure modes: network timeouts (increase fetch timeout or add retry), unexpected response formats (log the raw response and show a user-friendly error), and missing or empty data arrays (show 'No data available for this ticker').",
-        "status": "implemented",
-        "plannedFiles": [
-          "frontend/src/hooks/useMarketData.ts",
-          "frontend/src/lib/marketData/fetchMarketData.ts",
-          "frontend/src/lib/marketData/types.ts"
-        ],
-        "matchedFiles": [
-          "frontend/src/hooks/useMarketData.ts",
-          "frontend/src/lib/marketData/fetchMarketData.ts",
-          "frontend/src/lib/marketData/types.ts"
-        ]
-      },
-      {
-        "id": "REQ-19",
-        "summary": "Improve error display in frontend/src/App.tsx to show more specific guidance based on the error type returned by useMarketData: rate limit errors show cooldown timer and retry info, invalid ticker errors suggest checking the symbol, network errors prompt the user to check connectivity, and API errors display the provider's message if available.",
-        "status": "implemented",
-        "plannedFiles": [
-          "frontend/src/App.tsx"
-        ],
-        "matchedFiles": [
-          "frontend/src/App.tsx"
-        ]
-      },
-      {
-        "id": "REQ-20",
-        "summary": "Add a developer-friendly diagnostic mode (enabled via URL parameter ?debug=market-data) that exposes: last request details, raw API response, cache state, retry history, and backoff schedule in a collapsible panel at the bottom of the Analyzer tab.",
-        "status": "implemented",
-        "plannedFiles": [
-          "frontend/src/lib/marketData/marketDataClient.ts",
-          "frontend/src/hooks/useMarketData.ts",
-          "frontend/src/components/DiagnosticPanel.tsx",
-          "frontend/src/App.tsx"
-        ],
-        "matchedFiles": [
-          "frontend/src/lib/marketData/marketDataClient.ts",
-          "frontend/src/hooks/useMarketData.ts",
-          "frontend/src/components/DiagnosticPanel.tsx",
-          "frontend/src/App.tsx"
+          "frontend/src/hooks/useMarketData.ts"
         ]
       }
     ]
   },
   "changedFiles": [
     "build-request.json",
-    "caffeine.lock.json",
     "feature_evidence.json",
     "frontend-file-summaries.txt",
     "frontend-implementation-plan.json",
-    "frontend/src/App.tsx",
-    "frontend/src/components/CsvUploadPanel.tsx",
-    "frontend/src/components/DiagnosticPanel.tsx",
     "frontend/src/hooks/useMarketData.ts",
-    "frontend/src/lib/marketData/config.ts",
-    "frontend/src/lib/marketData/fetchMarketData.ts",
     "frontend/src/lib/marketData/marketDataClient.ts",
-    "frontend/src/lib/marketData/types.ts",
-    "frontend/src/lib/urlParams.ts",
     "project_state.json",
     "scratch/component-selection.json",
     "spec.md",
