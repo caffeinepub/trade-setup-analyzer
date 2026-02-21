@@ -2,9 +2,71 @@
   "kind": "feature_evidence_report",
   "features": [
     {
-      "featureId": "feature-fix-the-rate-limit-retry-loop-in-frontend-src-hooks-usemarketdata-ts-so-it-stops-repeating-the-same-rate-limit-reached-retrying-in-1s-message-indefinitely-ensure-the-retry-logic-respects-the-exponential-backoff-schedule-10s-30s-60s-and-stops-after-reaching-the-maximum-retry-attempts-3-instead-of-looping-forever",
-      "featureTitle": "Fix the rate-limit retry loop in frontend/src/hooks/useMarketData.ts so it stops repeating the same 'rate limit reached, retrying in 1s...' message indefinitely. Ensure the retry logic respects the exponential backoff schedule (10s, 30s, 60s) and stops after reaching the maximum retry attempts (3) instead of looping forever.",
+      "featureId": "feature-investigate-and-fix-the-fail-to-fetch-data-error-in-the-yahoo-finance-integration-by-adding-comprehensive-error-logging-to-frontend-src-lib-marketdata-fetchmarketdata-ts-to-capture-the-exact-failure-point-http-response-status-response-headers-raw-response-body-parsed-error-messages-and-network-exceptions",
+      "featureTitle": "Investigate and fix the 'fail to fetch data' error in the Yahoo Finance integration by adding comprehensive error logging to frontend/src/lib/marketData/fetchMarketData.ts to capture the exact failure point: HTTP response status, response headers, raw response body, parsed error messages, and network exceptions.",
       "files": [
+        "frontend/src/lib/marketData/fetchMarketData.ts"
+      ],
+      "components": [
+        "authorization@4.0.0",
+        "core-infrastructure@1.0.2",
+        "shadcn-ui@1.0.0",
+        "build-template-react@1.0.0",
+        "initial-app@1.0.0",
+        "github-export-icp-cli@1.0.0",
+        "http-outcalls@3.0.0"
+      ],
+      "testIds": [
+        "REQ-30"
+      ],
+      "confidence": "high"
+    },
+    {
+      "featureId": "feature-verify-that-the-yahoo-finance-api-endpoint-url-constructed-in-frontend-src-lib-marketdata-fetchmarketdata-ts-is-correctly-formatted-and-matches-yahoo-finance-s-expected-chart-api-format-including-all-required-query-parameters-interval-range-symbol-encoding",
+      "featureTitle": "Verify that the Yahoo Finance API endpoint URL constructed in frontend/src/lib/marketData/fetchMarketData.ts is correctly formatted and matches Yahoo Finance's expected chart API format, including all required query parameters (interval, range, symbol encoding).",
+      "files": [
+        "frontend/src/lib/marketData/fetchMarketData.ts"
+      ],
+      "components": [
+        "authorization@4.0.0",
+        "core-infrastructure@1.0.2",
+        "shadcn-ui@1.0.0",
+        "build-template-react@1.0.0",
+        "initial-app@1.0.0",
+        "github-export-icp-cli@1.0.0",
+        "http-outcalls@3.0.0"
+      ],
+      "testIds": [
+        "REQ-31"
+      ],
+      "confidence": "high"
+    },
+    {
+      "featureId": "feature-add-cors-and-network-connectivity-error-handling-to-frontend-src-lib-marketdata-fetchmarketdata-ts-to-detect-and-provide-specific-error-messages-for-common-failure-modes-cors-policy-blocks-network-timeouts-dns-resolution-failures-and-ssl-tls-errors",
+      "featureTitle": "Add CORS and network connectivity error handling to frontend/src/lib/marketData/fetchMarketData.ts to detect and provide specific error messages for common failure modes: CORS policy blocks, network timeouts, DNS resolution failures, and SSL/TLS errors.",
+      "files": [
+        "frontend/src/lib/marketData/fetchMarketData.ts",
+        "frontend/src/lib/marketData/types.ts"
+      ],
+      "components": [
+        "authorization@4.0.0",
+        "core-infrastructure@1.0.2",
+        "shadcn-ui@1.0.0",
+        "build-template-react@1.0.0",
+        "initial-app@1.0.0",
+        "github-export-icp-cli@1.0.0",
+        "http-outcalls@3.0.0"
+      ],
+      "testIds": [
+        "REQ-32"
+      ],
+      "confidence": "high"
+    },
+    {
+      "featureId": "feature-update-frontend-src-hooks-usemarketdata-ts-to-display-the-raw-error-message-from-the-fetch-operation-when-market-data-fails-so-users-and-developers-can-see-the-exact-failure-reason-in-the-ui",
+      "featureTitle": "Update frontend/src/hooks/useMarketData.ts to display the raw error message from the fetch operation when market data fails, so users and developers can see the exact failure reason in the UI.",
+      "files": [
+        "frontend/src/App.tsx",
         "frontend/src/hooks/useMarketData.ts"
       ],
       "components": [
@@ -13,18 +75,20 @@
         "shadcn-ui@1.0.0",
         "build-template-react@1.0.0",
         "initial-app@1.0.0",
-        "github-export-icp-cli@1.0.0"
+        "github-export-icp-cli@1.0.0",
+        "http-outcalls@3.0.0"
       ],
       "testIds": [
-        "REQ-21"
+        "REQ-33"
       ],
       "confidence": "high"
     },
     {
-      "featureId": "feature-update-the-retry-state-management-in-frontend-src-lib-marketdata-marketdataclient-ts-to-correctly-track-and-increment-the-current-attempt-count-across-retries-and-ensure-the-backoff-delay-calculation-uses-the-actual-attempt-number-rather-than-a-fixed-value",
-      "featureTitle": "Update the retry state management in frontend/src/lib/marketData/marketDataClient.ts to correctly track and increment the current attempt count across retries, and ensure the backoff delay calculation uses the actual attempt number rather than a fixed value.",
+      "featureId": "feature-test-the-yahoo-finance-integration-with-valid-ticker-symbols-aapl-msft-tsla-in-both-browser-console-and-production-environment-to-verify-successful-data-fetching-and-identify-any-environment-specific-issues-localhost-vs-deployed-canister",
+      "featureTitle": "Test the Yahoo Finance integration with valid ticker symbols (AAPL, MSFT, TSLA) in both browser console and production environment to verify successful data fetching and identify any environment-specific issues (localhost vs. deployed canister).",
       "files": [
-        "frontend/src/lib/marketData/marketDataClient.ts"
+        "frontend/src/components/DiagnosticPanel.tsx",
+        "frontend/src/lib/marketData/fetchMarketData.ts"
       ],
       "components": [
         "authorization@4.0.0",
@@ -32,29 +96,11 @@
         "shadcn-ui@1.0.0",
         "build-template-react@1.0.0",
         "initial-app@1.0.0",
-        "github-export-icp-cli@1.0.0"
+        "github-export-icp-cli@1.0.0",
+        "http-outcalls@3.0.0"
       ],
       "testIds": [
-        "REQ-22"
-      ],
-      "confidence": "high"
-    },
-    {
-      "featureId": "feature-add-timeout-logic-to-frontend-src-hooks-usemarketdata-ts-so-that-if-the-retry-loop-exceeds-a-maximum-total-duration-e-g-2-minutes-it-exits-gracefully-with-a-clear-error-message-indicating-that-retries-have-been-exhausted",
-      "featureTitle": "Add timeout logic to frontend/src/hooks/useMarketData.ts so that if the retry loop exceeds a maximum total duration (e.g., 2 minutes), it exits gracefully with a clear error message indicating that retries have been exhausted.",
-      "files": [
-        "frontend/src/hooks/useMarketData.ts"
-      ],
-      "components": [
-        "authorization@4.0.0",
-        "core-infrastructure@1.0.2",
-        "shadcn-ui@1.0.0",
-        "build-template-react@1.0.0",
-        "initial-app@1.0.0",
-        "github-export-icp-cli@1.0.0"
-      ],
-      "testIds": [
-        "REQ-23"
+        "REQ-34"
       ],
       "confidence": "high"
     }

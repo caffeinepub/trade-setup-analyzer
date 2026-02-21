@@ -1,6 +1,6 @@
 {
   "schemaVersion": "1.0.0",
-  "projectStateVersion": 11,
+  "projectStateVersion": 15,
   "summary": "Build an HTML5 web app where a user inputs a stock ticker/symbol and the app pulls live market data to analyze it and propose a trade setup (entry, stop loss, take profit) and potential earnings, rather than requiring the user to manually supply those values.",
   "architectural_notes": [
     "Add live market-data integration (choose provider/API), including rate-limiting, error handling, and caching/fallback behavior when data is unavailable.",
@@ -9,8 +9,8 @@
   "known_issues": [
     "Current UI requests manual analysis inputs (e.g., current price/swing levels), but user expectation is that the app derives these from the ticker via live data analysis.",
     "Live market-data API rate limit is being reached (provider blocks further requests temporarily), causing the app to fail fetching prices until the limit resets.",
-    "App is currently experiencing issues fetching market data; root cause needs investigation (network, API key, provider availability, or response format change).",
-    "Rate-limit retry loop is repeating indefinitely with the same delay message instead of applying exponential backoff; retry logic may be broken or backoff parameters set too low."
+    "Rate-limit retry loop is repeating indefinitely with the same delay message instead of applying exponential backoff; retry logic may be broken or backoff parameters set too low.",
+    "App is currently failing to fetch market data after switching to Yahoo Finance provider; error message displays 'fail to fetch data'."
   ],
   "isFixRequest": true,
   "existing_features": [
@@ -187,6 +187,94 @@
       "title": "Add timeout logic to frontend/src/hooks/useMarketData.ts so that if the retry loop exceeds a maximum total duration (e.g., 2 minutes), it exits gracefully with a clear error message indicating that retries have been exhausted.",
       "reqIds": [
         "REQ-23"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-replace-the-alpha-vantage-market-data-provider-with-yahoo-finance-api-integration-in-frontend-src-lib-marketdata-fetchmarketdata-ts-to-eliminate-rate-limit-issues-use-a-reliable-yahoo-finance-endpoint-that-provides-intraday-or-daily-ohlc-data-for-stock-tickers-without-requiring-an-api-key",
+      "title": "Replace the Alpha Vantage market data provider with Yahoo Finance API integration in frontend/src/lib/marketData/fetchMarketData.ts to eliminate rate-limit issues. Use a reliable Yahoo Finance endpoint that provides intraday or daily OHLC data for stock tickers without requiring an API key.",
+      "reqIds": [
+        "REQ-24"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-update-frontend-src-lib-marketdata-config-ts-to-remove-alpha-vantage-configuration-base-url-api-key-rate-limits-and-replace-with-yahoo-finance-configuration-including-base-url-and-any-necessary-request-parameters",
+      "title": "Update frontend/src/lib/marketData/config.ts to remove Alpha Vantage configuration (base URL, API key, rate limits) and replace with Yahoo Finance configuration including base URL and any necessary request parameters.",
+      "reqIds": [
+        "REQ-25"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-update-frontend-src-lib-marketdata-marketdataclient-ts-to-remove-or-adjust-rate-limit-retry-logic-request-spacing-and-backoff-parameters-to-match-yahoo-finance-s-actual-behavior-and-limits",
+      "title": "Update frontend/src/lib/marketData/marketDataClient.ts to remove or adjust rate-limit retry logic, request spacing, and backoff parameters to match Yahoo Finance's actual behavior and limits.",
+      "reqIds": [
+        "REQ-26"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-update-error-handling-in-frontend-src-hooks-usemarketdata-ts-to-remove-alpha-vantage-specific-rate-limit-detection-logic-and-replace-with-yahoo-finance-appropriate-error-handling",
+      "title": "Update error handling in frontend/src/hooks/useMarketData.ts to remove Alpha Vantage-specific rate-limit detection logic and replace with Yahoo Finance-appropriate error handling.",
+      "reqIds": [
+        "REQ-27"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-update-the-live-data-status-panel-in-frontend-src-app-tsx-to-display-yahoo-finance-as-the-data-source-label-instead-of-alpha-vantage",
+      "title": "Update the live-data status panel in frontend/src/App.tsx to display 'Yahoo Finance' as the data source label instead of 'Alpha Vantage'.",
+      "reqIds": [
+        "REQ-28"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-test-the-updated-market-data-integration-with-multiple-valid-tickers-e-g-aapl-msft-tsla-to-verify-that-price-data-loads-successfully-and-the-analyze-flow-works-end-to-end-without-rate-limit-errors",
+      "title": "Test the updated market data integration with multiple valid tickers (e.g., AAPL, MSFT, TSLA) to verify that price data loads successfully and the analyze flow works end-to-end without rate-limit errors.",
+      "reqIds": [
+        "REQ-29"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-investigate-and-fix-the-fail-to-fetch-data-error-in-the-yahoo-finance-integration-by-adding-comprehensive-error-logging-to-frontend-src-lib-marketdata-fetchmarketdata-ts-to-capture-the-exact-failure-point-http-response-status-response-headers-raw-response-body-parsed-error-messages-and-network-exceptions",
+      "title": "Investigate and fix the 'fail to fetch data' error in the Yahoo Finance integration by adding comprehensive error logging to frontend/src/lib/marketData/fetchMarketData.ts to capture the exact failure point: HTTP response status, response headers, raw response body, parsed error messages, and network exceptions.",
+      "reqIds": [
+        "REQ-30"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-verify-that-the-yahoo-finance-api-endpoint-url-constructed-in-frontend-src-lib-marketdata-fetchmarketdata-ts-is-correctly-formatted-and-matches-yahoo-finance-s-expected-chart-api-format-including-all-required-query-parameters-interval-range-symbol-encoding",
+      "title": "Verify that the Yahoo Finance API endpoint URL constructed in frontend/src/lib/marketData/fetchMarketData.ts is correctly formatted and matches Yahoo Finance's expected chart API format, including all required query parameters (interval, range, symbol encoding).",
+      "reqIds": [
+        "REQ-31"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-add-cors-and-network-connectivity-error-handling-to-frontend-src-lib-marketdata-fetchmarketdata-ts-to-detect-and-provide-specific-error-messages-for-common-failure-modes-cors-policy-blocks-network-timeouts-dns-resolution-failures-and-ssl-tls-errors",
+      "title": "Add CORS and network connectivity error handling to frontend/src/lib/marketData/fetchMarketData.ts to detect and provide specific error messages for common failure modes: CORS policy blocks, network timeouts, DNS resolution failures, and SSL/TLS errors.",
+      "reqIds": [
+        "REQ-32"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-update-frontend-src-hooks-usemarketdata-ts-to-display-the-raw-error-message-from-the-fetch-operation-when-market-data-fails-so-users-and-developers-can-see-the-exact-failure-reason-in-the-ui",
+      "title": "Update frontend/src/hooks/useMarketData.ts to display the raw error message from the fetch operation when market data fails, so users and developers can see the exact failure reason in the UI.",
+      "reqIds": [
+        "REQ-33"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-test-the-yahoo-finance-integration-with-valid-ticker-symbols-aapl-msft-tsla-in-both-browser-console-and-production-environment-to-verify-successful-data-fetching-and-identify-any-environment-specific-issues-localhost-vs-deployed-canister",
+      "title": "Test the Yahoo Finance integration with valid ticker symbols (AAPL, MSFT, TSLA) in both browser console and production environment to verify successful data fetching and identify any environment-specific issues (localhost vs. deployed canister).",
+      "reqIds": [
+        "REQ-34"
       ],
       "version": 1
     }

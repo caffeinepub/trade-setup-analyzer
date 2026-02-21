@@ -168,7 +168,7 @@ class MarketDataClient {
     // Track request details for diagnostics
     this.lastRequestDetails = {
       ticker,
-      url: `https://www.alphavantage.co/query?function=TIME_SERIES_INTRADAY&symbol=${ticker}&...`,
+      url: `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?interval=5m&range=1d`,
       timestamp: Date.now(),
     };
     
@@ -179,19 +179,17 @@ class MarketDataClient {
     
     // Track response details for diagnostics
     if (isError) {
-      // Cast to MarketDataError for type safety
       const errorResult = result as MarketDataError;
       this.lastResponseDetails = {
-        status: `Error: ${errorResult.errorCode}`,
-        bodyPreview: errorResult.error || 'Unknown error',
+        status: `error: ${errorResult.errorCode}`,
+        bodyPreview: errorResult.error,
         timestamp: Date.now(),
       };
     } else {
-      // Cast to MarketDataResult for type safety
       const successResult = result as MarketDataResult;
       this.lastResponseDetails = {
-        status: 'Success',
-        bodyPreview: `${successResult.pricePoints.length} price points`,
+        status: 'success',
+        bodyPreview: `${successResult.pricePoints.length} price points, latest: $${successResult.latestPrice}`,
         timestamp: Date.now(),
       };
     }
@@ -199,11 +197,10 @@ class MarketDataClient {
     return result;
   }
 
-  private async handleRateLimit(ticker: string, error: MarketDataError): Promise<MarketDataError> {
+  private handleRateLimit(ticker: string, error: MarketDataError): MarketDataError {
     let retryState = this.retryStates.get(ticker);
     
     if (!retryState) {
-      // Initialize retry state
       retryState = {
         attemptCount: 0,
         nextRetryTime: null,
@@ -212,106 +209,73 @@ class MarketDataClient {
       this.retryStates.set(ticker, retryState);
     }
 
+    // Increment attempt count
     retryState.attemptCount += 1;
-    log('Rate limit retry attempt', retryState.attemptCount, 'of', MAX_RETRIES, 'for', ticker);
+    log('Rate limit retry attempt', retryState.attemptCount, 'for', ticker);
 
+    // Check if max retries exceeded
     if (retryState.attemptCount > MAX_RETRIES) {
-      // Exhausted retries
-      log('Max retries exhausted for', ticker);
+      log('Max retries exceeded for', ticker);
       this.clearRetryState(ticker);
       return {
         ...error,
-        error: 'Rate limit reached. Please wait a few minutes before trying again.',
-        isRateLimited: false, // Mark as not rate limited anymore to stop retry loop
+        error: 'Rate limit retries exhausted. Please try again later.',
+        isRateLimited: false,
       };
     }
 
-    // Calculate backoff delay using the current attempt count
-    const delay = calculateBackoffDelay(retryState.attemptCount);
-    retryState.nextRetryTime = Date.now() + delay;
-    this.retryStates.set(ticker, retryState);
+    // Calculate backoff delay
+    const backoffDelay = calculateBackoffDelay(retryState.attemptCount);
+    retryState.nextRetryTime = Date.now() + backoffDelay;
     
-    log('Scheduled retry for', ticker, 'in', Math.round(delay / 1000), 's (attempt', retryState.attemptCount, ')');
+    log('Scheduling retry for', ticker, 'in', Math.round(backoffDelay / 1000), 'seconds');
 
-    // Return error with retry info (the hook will handle the UI)
     return error;
   }
 
   /**
-   * Schedule and execute automatic retry
+   * Schedule automatic retry after rate limit cooldown
    */
-  async scheduleRetry(ticker: string, onRetry: (result: MarketDataResult | MarketDataError) => void): Promise<void> {
-    const normalizedTicker = normalizeTicker(ticker);
-    const retryState = this.retryStates.get(normalizedTicker);
-
+  scheduleRetry(ticker: string, callback: (result: MarketDataResult | MarketDataError) => void): void {
+    const retryState = this.retryStates.get(ticker);
+    
     if (!retryState || !retryState.nextRetryTime) {
-      log('No retry state found for', normalizedTicker);
+      log('No retry state for', ticker);
       return;
     }
-
-    // Check if already exhausted retries
-    if (retryState.attemptCount > MAX_RETRIES) {
-      log('Max retries already exhausted for', normalizedTicker);
-      return;
-    }
-
-    const delay = Math.max(0, retryState.nextRetryTime - Date.now());
-    log('Scheduling retry for', normalizedTicker, 'in', Math.round(delay / 1000), 's');
 
     // Clear any existing timeout
     if (retryState.timeoutId) {
       clearTimeout(retryState.timeoutId);
     }
 
+    const delay = Math.max(0, retryState.nextRetryTime - Date.now());
+    log('Scheduling retry for', ticker, 'in', Math.round(delay / 1000), 'seconds');
+
     retryState.timeoutId = setTimeout(async () => {
-      log('Executing scheduled retry for', normalizedTicker, '(attempt', retryState.attemptCount, ')');
-      
-      // Execute the retry by calling executeRequest directly to avoid incrementing attempt count again
-      try {
-        const result = await this.executeRequest(normalizedTicker);
-        
-        // Type guard for error result
-        const isErrorResult = (r: MarketDataResult | MarketDataError): r is MarketDataError => {
-          return 'error' in r;
-        };
-
-        if (isErrorResult(result) && result.isRateLimited) {
-          // Still rate limited, handle it
-          const updatedError = await this.handleRateLimit(normalizedTicker, result);
-          onRetry(updatedError);
-        } else if (isErrorResult(result)) {
-          // Different error
-          this.clearRetryState(normalizedTicker);
-          onRetry(result);
-        } else {
-          // Success
-          this.cache.set(normalizedTicker, {
-            result,
-            timestamp: Date.now(),
-          });
-          this.clearRetryState(normalizedTicker);
-          onRetry(result);
-        }
-      } catch (error) {
-        log('Retry failed with exception for', normalizedTicker, ':', error);
-        this.clearRetryState(normalizedTicker);
-      }
+      log('Executing scheduled retry for', ticker);
+      const result = await this.fetch(ticker);
+      callback(result);
     }, delay);
-
-    this.retryStates.set(normalizedTicker, retryState);
   }
 
   /**
    * Get retry state for a ticker (for UI display)
    */
-  getRetryState(ticker: string): { attemptCount: number; nextRetryTime: number | null } | null {
-    const normalizedTicker = normalizeTicker(ticker);
-    const state = this.retryStates.get(normalizedTicker);
-    if (!state) return null;
-    return {
-      attemptCount: state.attemptCount,
-      nextRetryTime: state.nextRetryTime,
-    };
+  getRetryState(ticker: string): RetryState | null {
+    return this.retryStates.get(normalizeTicker(ticker)) || null;
+  }
+
+  /**
+   * Clear retry state for a ticker
+   */
+  private clearRetryState(ticker: string): void {
+    const retryState = this.retryStates.get(ticker);
+    if (retryState?.timeoutId) {
+      clearTimeout(retryState.timeoutId);
+    }
+    this.retryStates.delete(ticker);
+    log('Cleared retry state for', ticker);
   }
 
   /**
@@ -322,7 +286,7 @@ class MarketDataClient {
     const cacheEntries = Array.from(this.cache.entries()).map(([ticker, entry]) => ({
       ticker,
       age: Math.round((now - entry.timestamp) / 1000),
-      ttlRemaining: Math.round((CACHE_TTL_MS - (now - entry.timestamp)) / 1000),
+      ttlRemaining: Math.max(0, Math.round((CACHE_TTL_MS - (now - entry.timestamp)) / 1000)),
     }));
 
     const retryHistory = Array.from(this.retryStates.entries()).map(([ticker, state]) => ({
@@ -344,33 +308,7 @@ class MarketDataClient {
       retryHistory,
     };
   }
-
-  /**
-   * Clear retry state for a ticker
-   */
-  private clearRetryState(ticker: string): void {
-    const state = this.retryStates.get(ticker);
-    if (state?.timeoutId) {
-      clearTimeout(state.timeoutId);
-    }
-    this.retryStates.delete(ticker);
-    log('Cleared retry state for', ticker);
-  }
-
-  /**
-   * Clear all cache and state (e.g., on logout)
-   */
-  clearAll(): void {
-    log('Clearing all cache and state');
-    this.cache.clear();
-    this.requestStates.clear();
-    for (const [ticker] of this.retryStates) {
-      this.clearRetryState(ticker);
-    }
-    this.cacheHits = 0;
-    this.cacheMisses = 0;
-  }
 }
 
-// Singleton instance
+// Export singleton instance
 export const marketDataClient = new MarketDataClient();

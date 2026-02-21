@@ -1,67 +1,97 @@
 {
   "kind": "build_request",
-  "title": "Fix infinite rate-limit retry loop",
+  "title": "Fix Yahoo Finance market data fetching failure",
   "projectName": "Trade Setup Analyzer",
   "priority": "high",
   "requirements": [
     {
-      "id": "REQ-21",
-      "text": "Fix the rate-limit retry loop in frontend/src/hooks/useMarketData.ts so it stops repeating the same 'rate limit reached, retrying in 1s...' message indefinitely. Ensure the retry logic respects the exponential backoff schedule (10s, 30s, 60s) and stops after reaching the maximum retry attempts (3) instead of looping forever.",
+      "id": "REQ-30",
+      "text": "Investigate and fix the 'fail to fetch data' error in the Yahoo Finance integration by adding comprehensive error logging to frontend/src/lib/marketData/fetchMarketData.ts to capture the exact failure point: HTTP response status, response headers, raw response body, parsed error messages, and network exceptions.",
       "target": "frontend",
       "source": {
         "messageIds": [
-          "msg-11"
+          "msg-user-fail-to-fetch"
         ],
         "quotes": [
-          "rate limit reached,  retrying in 1s...it keep repeating that message"
+          "it says fail to fetch data"
         ]
       },
       "acceptanceCriteria": [
-        "The retry message updates with increasing delays (10s, 30s, 60s) instead of always showing '1s'",
-        "After 3 failed attempts, the retry loop stops and shows a final error state",
-        "The cooldown timer in the UI reflects the actual backoff delay from the policy",
-        "No infinite retry loops occur when rate limits are hit"
+        "Console logs show the exact HTTP status code and response body when the fetch fails",
+        "Error logs distinguish between network failures, HTTP errors, and parsing failures",
+        "Logs are written at debug level and do not expose sensitive data"
       ]
     },
     {
-      "id": "REQ-22",
-      "text": "Update the retry state management in frontend/src/lib/marketData/marketDataClient.ts to correctly track and increment the current attempt count across retries, and ensure the backoff delay calculation uses the actual attempt number rather than a fixed value.",
+      "id": "REQ-31",
+      "text": "Verify that the Yahoo Finance API endpoint URL constructed in frontend/src/lib/marketData/fetchMarketData.ts is correctly formatted and matches Yahoo Finance's expected chart API format, including all required query parameters (interval, range, symbol encoding).",
       "target": "frontend",
       "source": {
         "messageIds": [
-          "msg-11"
+          "msg-user-fail-to-fetch"
         ]
       },
       "acceptanceCriteria": [
-        "The retry attempt counter increments correctly (0, 1, 2, 3)",
-        "Each retry uses the backoff delay corresponding to its attempt number",
-        "Diagnostic data shows accurate retry history with correct attempt numbers and delays"
+        "The constructed URL matches Yahoo Finance's documented chart API format",
+        "Ticker symbols are properly URL-encoded",
+        "All required query parameters are present with valid values"
       ]
     },
     {
-      "id": "REQ-23",
-      "text": "Add timeout logic to frontend/src/hooks/useMarketData.ts so that if the retry loop exceeds a maximum total duration (e.g., 2 minutes), it exits gracefully with a clear error message indicating that retries have been exhausted.",
+      "id": "REQ-32",
+      "text": "Add CORS and network connectivity error handling to frontend/src/lib/marketData/fetchMarketData.ts to detect and provide specific error messages for common failure modes: CORS policy blocks, network timeouts, DNS resolution failures, and SSL/TLS errors.",
       "target": "frontend",
       "source": {
         "messageIds": [
-          "msg-11"
+          "msg-user-fail-to-fetch"
         ]
       },
       "acceptanceCriteria": [
-        "If retries continue beyond 2 minutes total, the loop terminates",
-        "A clear error message is shown: 'Rate limit retries exhausted. Please try again later.'",
-        "The user can manually trigger a new fetch attempt after the timeout"
+        "CORS errors display a user-friendly message explaining the browser policy block",
+        "Network timeout errors suggest checking connectivity",
+        "Each error type returns a distinct MarketDataError code"
+      ]
+    },
+    {
+      "id": "REQ-33",
+      "text": "Update frontend/src/hooks/useMarketData.ts to display the raw error message from the fetch operation when market data fails, so users and developers can see the exact failure reason in the UI.",
+      "target": "frontend",
+      "source": {
+        "messageIds": [
+          "msg-user-fail-to-fetch"
+        ]
+      },
+      "acceptanceCriteria": [
+        "The error display in App.tsx shows the complete error message from useMarketData",
+        "Error text includes technical details when in diagnostic mode",
+        "Generic 'fail to fetch data' messages are replaced with specific error descriptions"
+      ]
+    },
+    {
+      "id": "REQ-34",
+      "text": "Test the Yahoo Finance integration with valid ticker symbols (AAPL, MSFT, TSLA) in both browser console and production environment to verify successful data fetching and identify any environment-specific issues (localhost vs. deployed canister).",
+      "target": "frontend",
+      "source": {
+        "messageIds": [
+          "msg-user-fail-to-fetch"
+        ]
+      },
+      "acceptanceCriteria": [
+        "Market data successfully loads for valid tickers in development environment",
+        "Market data successfully loads for valid tickers in deployed canister environment",
+        "Error messages clearly indicate whether the failure is environment-specific"
       ]
     }
   ],
   "constraints": [
-    "Do not modify the exponential backoff policy constants in frontend/src/lib/marketData/marketDataPolicy.ts",
-    "Preserve existing rate-limit detection logic in frontend/src/lib/marketData/fetchMarketData.ts"
+    "Do not change the backend Motoko actor implementation",
+    "Preserve the existing market data client caching and retry logic",
+    "Maintain compatibility with the current DiagnosticPanel component interface"
   ],
   "nonGoals": [
-    "Changing the Alpha Vantage API provider or switching to a different data source",
-    "Modifying the maximum retry limit or backoff delays",
-    "Adding user controls to configure retry behavior"
+    "Switching to a different market data provider",
+    "Adding authentication or API keys for Yahoo Finance",
+    "Implementing real-time WebSocket data feeds"
   ],
   "imageRequirements": {
     "required": [],

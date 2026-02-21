@@ -1,21 +1,37 @@
 /**
  * Market data fetch helper
- * Fetches recent price series from Alpha Vantage API
+ * Fetches recent price series from Yahoo Finance API with comprehensive error logging
  */
 
-import { MARKET_DATA_CONFIG, validateApiKey } from './config';
+import { MARKET_DATA_CONFIG } from './config';
 import type { MarketDataResult, MarketDataError, PricePoint } from './types';
 
-const DEBUG = false; // Set to true for verbose logging
+const DEBUG = true; // Enable verbose logging for diagnostics
 
 function log(...args: any[]) {
   if (DEBUG) {
-    console.log('[MarketData:fetch]', ...args);
+    console.debug('[MarketData:fetch]', ...args);
   }
 }
 
 function logError(...args: any[]) {
   console.error('[MarketData:fetch]', ...args);
+}
+
+/**
+ * Detect environment context
+ */
+function getEnvironmentInfo() {
+  const hostname = typeof window !== 'undefined' ? window.location.hostname : 'unknown';
+  const origin = typeof window !== 'undefined' ? window.location.origin : 'unknown';
+  const isDevelopment = hostname === 'localhost' || hostname === '127.0.0.1';
+  
+  return {
+    hostname,
+    origin,
+    isDevelopment,
+    environment: isDevelopment ? 'development' : 'production',
+  };
 }
 
 /**
@@ -27,26 +43,36 @@ function createTimeoutController(timeoutMs: number): AbortController {
   return controller;
 }
 
-export async function fetchMarketData(ticker: string): Promise<MarketDataResult | MarketDataError> {
-  log('Starting fetch for ticker:', ticker);
+/**
+ * Test helper function for console testing
+ * Usage: testFetchMarketData('AAPL')
+ */
+export async function testFetchMarketData(ticker: string): Promise<void> {
+  console.log('=== Market Data Fetch Test ===');
+  console.log('Ticker:', ticker);
+  console.log('Environment:', getEnvironmentInfo());
   
-  // Validate API key before making request
-  const apiKeyValidation = validateApiKey();
-  if (!apiKeyValidation.valid) {
-    logError('API key validation failed:', apiKeyValidation.error);
-    return {
-      ticker: ticker.trim().toUpperCase(),
-      error: apiKeyValidation.error || 'API key configuration error',
-      provider: MARKET_DATA_CONFIG.provider,
-      errorCode: 'config_error',
-      isRateLimited: false,
-    };
+  const result = await fetchMarketData(ticker);
+  
+  if ('error' in result) {
+    console.error('❌ Fetch failed:', result);
+  } else {
+    console.log('✅ Fetch succeeded:', result);
   }
+  
+  console.log('=== Test Complete ===');
+}
+
+export async function fetchMarketData(ticker: string): Promise<MarketDataResult | MarketDataError> {
+  const env = getEnvironmentInfo();
+  log('=== Starting fetch ===');
+  log('Ticker:', ticker);
+  log('Environment:', env);
   
   // Validate ticker input
   const cleanTicker = ticker.trim().toUpperCase();
   if (!cleanTicker || !/^[A-Z]{1,5}$/.test(cleanTicker)) {
-    log('Invalid ticker format:', cleanTicker);
+    log('❌ Invalid ticker format:', cleanTicker);
     return {
       ticker: cleanTicker,
       error: 'Invalid ticker symbol. Please enter a valid stock symbol (e.g., AAPL, MSFT).',
@@ -57,112 +83,260 @@ export async function fetchMarketData(ticker: string): Promise<MarketDataResult 
   }
 
   try {
-    // Fetch intraday data (5-minute intervals, compact output = last 100 data points)
-    const url = new URL(MARKET_DATA_CONFIG.baseUrl);
-    url.searchParams.append('function', 'TIME_SERIES_INTRADAY');
-    url.searchParams.append('symbol', cleanTicker);
-    url.searchParams.append('interval', '5min');
-    url.searchParams.append('outputsize', 'compact');
-    url.searchParams.append('apikey', MARKET_DATA_CONFIG.apiKey);
+    // Construct URL
+    const url = new URL(`${MARKET_DATA_CONFIG.baseUrl}/v8/finance/chart/${cleanTicker}`);
+    url.searchParams.append('interval', '5m'); // 5-minute intervals
+    url.searchParams.append('range', '1d'); // Last 1 day of data
 
-    // Log URL without exposing API key
-    const logUrl = url.toString().replace(MARKET_DATA_CONFIG.apiKey, '***');
-    log('Request URL:', logUrl);
+    const urlString = url.toString();
+    log('📡 Request URL:', urlString);
+    log('Request method: GET');
+    log('Request headers: Accept: application/json');
 
     // Create timeout controller (15 seconds)
     const controller = createTimeoutController(15000);
     
     const startTime = Date.now();
-    const response = await fetch(url.toString(), { signal: controller.signal });
-    const fetchDuration = Date.now() - startTime;
+    let response: Response;
     
-    log('Response received in', fetchDuration, 'ms, status:', response.status);
-    log('Response headers:', Object.fromEntries(response.headers.entries()));
-    
-    if (!response.ok) {
-      logError('HTTP error! status:', response.status);
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    const data = await response.json();
-    log('Response data keys:', Object.keys(data));
-    log('Response data preview:', JSON.stringify(data).substring(0, 500));
-
-    // Check for API error messages
-    if (data['Error Message']) {
-      log('API returned Error Message:', data['Error Message']);
+    try {
+      response = await fetch(urlString, { 
+        signal: controller.signal,
+        headers: {
+          'Accept': 'application/json',
+        },
+      });
+    } catch (fetchError: any) {
+      const fetchDuration = Date.now() - startTime;
+      logError('❌ Fetch exception after', fetchDuration, 'ms');
+      logError('Error name:', fetchError.name);
+      logError('Error message:', fetchError.message);
+      logError('Error type:', typeof fetchError);
+      logError('Full error object:', fetchError);
+      
+      // Detect specific error types
+      if (fetchError.name === 'AbortError') {
+        logError('🕐 Timeout error detected');
+        return {
+          ticker: cleanTicker,
+          error: 'Request timed out after 15 seconds. Please check your internet connection and try again.',
+          provider: MARKET_DATA_CONFIG.provider,
+          errorCode: 'timeout',
+          isRateLimited: false,
+          rawResponse: `Timeout after ${fetchDuration}ms in ${env.environment} environment (${env.origin})`,
+        };
+      }
+      
+      if (fetchError.name === 'TypeError') {
+        // TypeError often indicates CORS or network connectivity issues
+        logError('🚫 TypeError detected - likely CORS or network issue');
+        
+        const isCorsError = fetchError.message.includes('CORS') || 
+                           fetchError.message.includes('cross-origin') ||
+                           fetchError.message.includes('Failed to fetch');
+        
+        if (isCorsError) {
+          return {
+            ticker: cleanTicker,
+            error: `Browser blocked the request due to CORS policy. Yahoo Finance API cannot be accessed directly from the browser in ${env.environment} mode. This is a browser security restriction, not an application error.`,
+            provider: MARKET_DATA_CONFIG.provider,
+            errorCode: 'network_error',
+            isRateLimited: false,
+            rawResponse: `CORS error in ${env.environment} environment (${env.origin}): ${fetchError.message}`,
+          };
+        }
+        
+        return {
+          ticker: cleanTicker,
+          error: `Network error: ${fetchError.message}. Please check your internet connection.`,
+          provider: MARKET_DATA_CONFIG.provider,
+          errorCode: 'network_error',
+          isRateLimited: false,
+          rawResponse: `Network error in ${env.environment} environment (${env.origin}): ${fetchError.message}`,
+        };
+      }
+      
+      // Generic network error
+      logError('🌐 Generic network error');
       return {
         ticker: cleanTicker,
-        error: `Invalid ticker symbol "${cleanTicker}". Please verify the symbol is correct.`,
+        error: `Failed to connect to market data provider: ${fetchError.message}`,
+        provider: MARKET_DATA_CONFIG.provider,
+        errorCode: 'network_error',
+        isRateLimited: false,
+        rawResponse: `Network error in ${env.environment} environment (${env.origin}): ${fetchError.message}`,
+      };
+    }
+    
+    const fetchDuration = Date.now() - startTime;
+    
+    log('✅ Response received in', fetchDuration, 'ms');
+    log('Response status:', response.status);
+    log('Response statusText:', response.statusText);
+    log('Response ok:', response.ok);
+    log('Response headers:', {
+      contentType: response.headers.get('content-type'),
+      contentLength: response.headers.get('content-length'),
+      server: response.headers.get('server'),
+    });
+    
+    if (!response.ok) {
+      logError('❌ HTTP error! status:', response.status, response.statusText);
+      
+      // Try to read response body for more details
+      let responseBody = '';
+      try {
+        responseBody = await response.text();
+        logError('Response body:', responseBody.substring(0, 500));
+      } catch (bodyError) {
+        logError('Could not read response body:', bodyError);
+      }
+      
+      if (response.status === 404) {
+        return {
+          ticker: cleanTicker,
+          error: `Invalid ticker symbol "${cleanTicker}". Please verify the symbol is correct.`,
+          provider: MARKET_DATA_CONFIG.provider,
+          errorCode: 'invalid_ticker',
+          isRateLimited: false,
+          rawResponse: `HTTP 404 in ${env.environment}: ${responseBody.substring(0, 200)}`,
+        };
+      }
+      
+      if (response.status === 429) {
+        return {
+          ticker: cleanTicker,
+          error: 'Rate limit reached. Retrying automatically...',
+          provider: MARKET_DATA_CONFIG.provider,
+          errorCode: 'rate_limit',
+          isRateLimited: true,
+          rawResponse: `HTTP 429 in ${env.environment}: ${responseBody.substring(0, 200)}`,
+        };
+      }
+      
+      return {
+        ticker: cleanTicker,
+        error: `HTTP error ${response.status}: ${response.statusText}`,
+        provider: MARKET_DATA_CONFIG.provider,
+        errorCode: 'api_error',
+        isRateLimited: false,
+        rawResponse: `HTTP ${response.status} in ${env.environment}: ${responseBody.substring(0, 200)}`,
+      };
+    }
+
+    // Parse JSON response
+    let data: any;
+    let rawText = '';
+    
+    try {
+      rawText = await response.text();
+      log('Response body length:', rawText.length, 'characters');
+      log('Response body preview:', rawText.substring(0, 200));
+      
+      data = JSON.parse(rawText);
+      log('✅ JSON parsed successfully');
+      log('Response data keys:', Object.keys(data));
+    } catch (parseError: any) {
+      logError('❌ JSON parse error:', parseError.message);
+      logError('Raw response text (first 500 chars):', rawText.substring(0, 500));
+      
+      return {
+        ticker: cleanTicker,
+        error: `Failed to parse response from market data provider. The API may have returned invalid data.`,
+        provider: MARKET_DATA_CONFIG.provider,
+        errorCode: 'api_error',
+        isRateLimited: false,
+        rawResponse: `Parse error in ${env.environment}: ${parseError.message}. Body: ${rawText.substring(0, 200)}`,
+      };
+    }
+
+    // Check for API errors
+    if (data.chart?.error) {
+      const errorMsg = data.chart.error.description || data.chart.error.code;
+      logError('❌ API returned error:', errorMsg);
+      log('Full error object:', data.chart.error);
+      
+      return {
+        ticker: cleanTicker,
+        error: `Unable to fetch data for "${cleanTicker}". ${errorMsg}`,
         provider: MARKET_DATA_CONFIG.provider,
         errorCode: 'invalid_ticker',
         isRateLimited: false,
-        rawResponse: JSON.stringify(data).substring(0, 500),
+        rawResponse: `API error in ${env.environment}: ${errorMsg}`,
       };
     }
 
-    // Rate limit detection
-    if (data['Note']) {
-      log('API returned Note (rate limit):', data['Note']);
-      return {
-        ticker: cleanTicker,
-        error: 'API rate limit reached. Retrying automatically...',
-        provider: MARKET_DATA_CONFIG.provider,
-        errorCode: 'rate_limit',
-        isRateLimited: true,
-        rawResponse: data['Note'],
-      };
-    }
-
-    if (data['Information']) {
-      log('API returned Information (rate limit):', data['Information']);
-      return {
-        ticker: cleanTicker,
-        error: 'API rate limit reached. Retrying automatically...',
-        provider: MARKET_DATA_CONFIG.provider,
-        errorCode: 'rate_limit',
-        isRateLimited: true,
-        rawResponse: data['Information'],
-      };
-    }
-
-    // Parse time series data
-    const timeSeries = data['Time Series (5min)'];
-    if (!timeSeries || Object.keys(timeSeries).length === 0) {
-      log('No intraday data, falling back to daily data');
-      // Fallback to daily data if intraday not available
-      return fetchDailyData(cleanTicker);
-    }
-
-    // Convert to array of price points
-    const pricePoints: PricePoint[] = Object.entries(timeSeries)
-      .map(([timestamp, values]: [string, any]) => ({
-        timestamp,
-        open: parseFloat(values['1. open']),
-        high: parseFloat(values['2. high']),
-        low: parseFloat(values['3. low']),
-        close: parseFloat(values['4. close']),
-        volume: parseFloat(values['5. volume']),
-      }))
-      .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-
-    log('Parsed', pricePoints.length, 'price points');
-
-    if (pricePoints.length === 0) {
-      logError('No price data available after parsing');
+    // Parse chart data
+    const result = data.chart?.result?.[0];
+    if (!result) {
+      logError('❌ No chart result in response');
+      log('Full response structure:', JSON.stringify(data).substring(0, 500));
+      
       return {
         ticker: cleanTicker,
         error: 'No price data available for this ticker.',
         provider: MARKET_DATA_CONFIG.provider,
         errorCode: 'no_data',
         isRateLimited: false,
-        rawResponse: JSON.stringify(data).substring(0, 500),
+        rawResponse: `No chart result in ${env.environment}. Response: ${JSON.stringify(data).substring(0, 200)}`,
+      };
+    }
+
+    const timestamps = result.timestamp;
+    const quote = result.indicators?.quote?.[0];
+    
+    log('Timestamps count:', timestamps?.length || 0);
+    log('Quote data available:', !!quote);
+    
+    if (!timestamps || !quote || timestamps.length === 0) {
+      log('⚠️ No intraday price data, trying daily data');
+      return fetchDailyData(cleanTicker);
+    }
+
+    // Convert to array of price points
+    const pricePoints: PricePoint[] = timestamps
+      .map((ts: number, index: number) => {
+        const open = quote.open?.[index];
+        const high = quote.high?.[index];
+        const low = quote.low?.[index];
+        const close = quote.close?.[index];
+        const volume = quote.volume?.[index];
+        
+        // Skip data points with null values
+        if (open == null || high == null || low == null || close == null) {
+          return null;
+        }
+        
+        return {
+          timestamp: new Date(ts * 1000).toISOString(),
+          open,
+          high,
+          low,
+          close,
+          volume: volume || 0,
+        };
+      })
+      .filter((point): point is PricePoint => point !== null)
+      .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
+    log('✅ Parsed', pricePoints.length, 'price points');
+
+    if (pricePoints.length === 0) {
+      logError('❌ No valid price data after parsing');
+      return {
+        ticker: cleanTicker,
+        error: 'No price data available for this ticker.',
+        provider: MARKET_DATA_CONFIG.provider,
+        errorCode: 'no_data',
+        isRateLimited: false,
+        rawResponse: `No valid price points in ${env.environment}. Raw data: ${JSON.stringify(data).substring(0, 200)}`,
       };
     }
 
     // Get latest price point
     const latest = pricePoints[pricePoints.length - 1];
-    log('Latest price:', latest.close, 'at', latest.timestamp);
+    log('✅ Latest price:', latest.close, 'at', latest.timestamp);
+    log('=== Fetch complete ===');
 
     return {
       ticker: cleanTicker,
@@ -173,120 +347,251 @@ export async function fetchMarketData(ticker: string): Promise<MarketDataResult 
       provider: MARKET_DATA_CONFIG.provider,
     };
   } catch (error) {
+    logError('❌ Unexpected error in fetchMarketData');
+    logError('Error type:', typeof error);
+    logError('Error:', error);
+    
     if (error instanceof Error) {
-      logError('Fetch error:', error.message, error.name);
-      
-      // Check if it's a timeout error
-      if (error.name === 'AbortError') {
-        return {
-          ticker: cleanTicker,
-          error: 'Request timed out. Please check your connection and try again.',
-          provider: MARKET_DATA_CONFIG.provider,
-          errorCode: 'timeout',
-          isRateLimited: false,
-        };
-      }
+      logError('Error name:', error.name);
+      logError('Error message:', error.message);
+      logError('Error stack:', error.stack);
       
       return {
         ticker: cleanTicker,
-        error: error.message || 'Failed to fetch market data. Please try again.',
+        error: `Unexpected error: ${error.message}`,
         provider: MARKET_DATA_CONFIG.provider,
         errorCode: 'network_error',
         isRateLimited: false,
+        rawResponse: `Unexpected error in ${env.environment}: ${error.name} - ${error.message}`,
       };
     }
     
-    logError('Unknown error:', error);
+    logError('❌ Unknown error type:', error);
     return {
       ticker: cleanTicker,
-      error: 'Failed to fetch market data. Please try again.',
+      error: 'An unexpected error occurred. Please try again.',
       provider: MARKET_DATA_CONFIG.provider,
       errorCode: 'network_error',
       isRateLimited: false,
+      rawResponse: `Unknown error in ${env.environment}: ${String(error)}`,
     };
   }
 }
 
 async function fetchDailyData(ticker: string): Promise<MarketDataResult | MarketDataError> {
-  log('Fetching daily data for:', ticker);
+  const env = getEnvironmentInfo();
+  log('=== Fetching daily data ===');
+  log('Ticker:', ticker);
   
   try {
-    const url = new URL(MARKET_DATA_CONFIG.baseUrl);
-    url.searchParams.append('function', 'TIME_SERIES_DAILY');
-    url.searchParams.append('symbol', ticker);
-    url.searchParams.append('outputsize', 'compact');
-    url.searchParams.append('apikey', MARKET_DATA_CONFIG.apiKey);
+    const url = new URL(`${MARKET_DATA_CONFIG.baseUrl}/v8/finance/chart/${ticker}`);
+    url.searchParams.append('interval', '1d'); // Daily intervals
+    url.searchParams.append('range', '3mo'); // Last 3 months
 
-    const logUrl = url.toString().replace(MARKET_DATA_CONFIG.apiKey, '***');
-    log('Daily request URL:', logUrl);
+    const urlString = url.toString();
+    log('📡 Daily request URL:', urlString);
 
     const controller = createTimeoutController(15000);
-    const response = await fetch(url.toString(), { signal: controller.signal });
     
-    log('Daily response status:', response.status);
-    
-    if (!response.ok) {
-      logError('Daily HTTP error! status:', response.status);
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    const data = await response.json();
-    log('Daily response data keys:', Object.keys(data));
-
-    // Rate limit detection in daily fallback
-    if (data['Note'] || data['Information']) {
-      log('Daily API rate limit detected');
+    let response: Response;
+    try {
+      response = await fetch(urlString, { 
+        signal: controller.signal,
+        headers: {
+          'Accept': 'application/json',
+        },
+      });
+    } catch (fetchError: any) {
+      logError('❌ Daily fetch exception');
+      logError('Error:', fetchError);
+      
+      if (fetchError.name === 'AbortError') {
+        return {
+          ticker,
+          error: 'Request timed out. Please check your connection and try again.',
+          provider: MARKET_DATA_CONFIG.provider,
+          errorCode: 'timeout',
+          isRateLimited: false,
+          rawResponse: `Daily timeout in ${env.environment}`,
+        };
+      }
+      
+      if (fetchError.name === 'TypeError') {
+        const isCorsError = fetchError.message.includes('CORS') || 
+                           fetchError.message.includes('cross-origin') ||
+                           fetchError.message.includes('Failed to fetch');
+        
+        if (isCorsError) {
+          return {
+            ticker,
+            error: `Browser blocked the request due to CORS policy. Yahoo Finance API cannot be accessed directly from the browser in ${env.environment} mode.`,
+            provider: MARKET_DATA_CONFIG.provider,
+            errorCode: 'network_error',
+            isRateLimited: false,
+            rawResponse: `Daily CORS error in ${env.environment}: ${fetchError.message}`,
+          };
+        }
+      }
+      
       return {
         ticker,
-        error: 'API rate limit reached. Retrying automatically...',
+        error: `Network error: ${fetchError.message}`,
         provider: MARKET_DATA_CONFIG.provider,
-        errorCode: 'rate_limit',
-        isRateLimited: true,
-        rawResponse: data['Note'] || data['Information'],
+        errorCode: 'network_error',
+        isRateLimited: false,
+        rawResponse: `Daily network error in ${env.environment}: ${fetchError.message}`,
+      };
+    }
+    
+    log('✅ Daily response status:', response.status);
+    
+    if (!response.ok) {
+      logError('❌ Daily HTTP error! status:', response.status);
+      
+      let responseBody = '';
+      try {
+        responseBody = await response.text();
+        logError('Daily response body:', responseBody.substring(0, 500));
+      } catch (bodyError) {
+        logError('Could not read daily response body:', bodyError);
+      }
+      
+      if (response.status === 404) {
+        return {
+          ticker,
+          error: `Invalid ticker symbol "${ticker}". Please verify the symbol is correct.`,
+          provider: MARKET_DATA_CONFIG.provider,
+          errorCode: 'invalid_ticker',
+          isRateLimited: false,
+          rawResponse: `Daily HTTP 404 in ${env.environment}`,
+        };
+      }
+      
+      if (response.status === 429) {
+        return {
+          ticker,
+          error: 'Rate limit reached. Retrying automatically...',
+          provider: MARKET_DATA_CONFIG.provider,
+          errorCode: 'rate_limit',
+          isRateLimited: true,
+          rawResponse: `Daily HTTP 429 in ${env.environment}`,
+        };
+      }
+      
+      return {
+        ticker,
+        error: `HTTP error ${response.status}: ${response.statusText}`,
+        provider: MARKET_DATA_CONFIG.provider,
+        errorCode: 'api_error',
+        isRateLimited: false,
+        rawResponse: `Daily HTTP ${response.status} in ${env.environment}`,
       };
     }
 
-    if (data['Error Message']) {
-      log('Daily API error:', data['Error Message']);
+    let data: any;
+    let rawText = '';
+    
+    try {
+      rawText = await response.text();
+      log('Daily response body length:', rawText.length);
+      data = JSON.parse(rawText);
+      log('✅ Daily JSON parsed successfully');
+      log('Daily response data keys:', Object.keys(data));
+    } catch (parseError: any) {
+      logError('❌ Daily JSON parse error:', parseError.message);
       return {
         ticker,
-        error: 'Unable to fetch market data. Please verify the ticker symbol and try again.',
+        error: 'Failed to parse daily data response.',
+        provider: MARKET_DATA_CONFIG.provider,
+        errorCode: 'api_error',
+        isRateLimited: false,
+        rawResponse: `Daily parse error in ${env.environment}: ${parseError.message}`,
+      };
+    }
+
+    // Check for API errors
+    if (data.chart?.error) {
+      const errorMsg = data.chart.error.description || data.chart.error.code;
+      logError('❌ Daily API error:', errorMsg);
+      return {
+        ticker,
+        error: `Unable to fetch data for "${ticker}". ${errorMsg}`,
         provider: MARKET_DATA_CONFIG.provider,
         errorCode: 'invalid_ticker',
         isRateLimited: false,
-        rawResponse: data['Error Message'],
+        rawResponse: `Daily API error in ${env.environment}: ${errorMsg}`,
       };
     }
 
-    const timeSeries = data['Time Series (Daily)'];
-    if (!timeSeries || Object.keys(timeSeries).length === 0) {
-      logError('No daily data available');
+    const result = data.chart?.result?.[0];
+    if (!result) {
+      logError('❌ No daily chart result');
       return {
         ticker,
         error: 'No price data available for this ticker.',
         provider: MARKET_DATA_CONFIG.provider,
         errorCode: 'no_data',
         isRateLimited: false,
-        rawResponse: JSON.stringify(data).substring(0, 500),
+        rawResponse: `No daily chart result in ${env.environment}`,
       };
     }
 
-    const pricePoints: PricePoint[] = Object.entries(timeSeries)
-      .slice(0, 100)
-      .map(([timestamp, values]: [string, any]) => ({
-        timestamp,
-        open: parseFloat(values['1. open']),
-        high: parseFloat(values['2. high']),
-        low: parseFloat(values['3. low']),
-        close: parseFloat(values['4. close']),
-        volume: parseFloat(values['5. volume']),
-      }))
+    const timestamps = result.timestamp;
+    const quote = result.indicators?.quote?.[0];
+    
+    if (!timestamps || !quote || timestamps.length === 0) {
+      logError('❌ No daily price data available');
+      return {
+        ticker,
+        error: 'No price data available for this ticker.',
+        provider: MARKET_DATA_CONFIG.provider,
+        errorCode: 'no_data',
+        isRateLimited: false,
+        rawResponse: `No daily timestamps in ${env.environment}`,
+      };
+    }
+
+    const pricePoints: PricePoint[] = timestamps
+      .map((ts: number, index: number) => {
+        const open = quote.open?.[index];
+        const high = quote.high?.[index];
+        const low = quote.low?.[index];
+        const close = quote.close?.[index];
+        const volume = quote.volume?.[index];
+        
+        // Skip data points with null values
+        if (open == null || high == null || low == null || close == null) {
+          return null;
+        }
+        
+        return {
+          timestamp: new Date(ts * 1000).toISOString(),
+          open,
+          high,
+          low,
+          close,
+          volume: volume || 0,
+        };
+      })
+      .filter((point): point is PricePoint => point !== null)
       .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
 
-    log('Parsed', pricePoints.length, 'daily price points');
+    log('✅ Parsed', pricePoints.length, 'daily price points');
+
+    if (pricePoints.length === 0) {
+      return {
+        ticker,
+        error: 'No price data available for this ticker.',
+        provider: MARKET_DATA_CONFIG.provider,
+        errorCode: 'no_data',
+        isRateLimited: false,
+        rawResponse: `No valid daily price points in ${env.environment}`,
+      };
+    }
 
     const latest = pricePoints[pricePoints.length - 1];
-    log('Latest daily price:', latest.close, 'at', latest.timestamp);
+    log('✅ Latest daily price:', latest.close, 'at', latest.timestamp);
+    log('=== Daily fetch complete ===');
 
     return {
       ticker,
@@ -297,27 +602,27 @@ async function fetchDailyData(ticker: string): Promise<MarketDataResult | Market
       provider: MARKET_DATA_CONFIG.provider,
     };
   } catch (error) {
+    logError('❌ Unexpected error in fetchDailyData');
+    logError('Error:', error);
+    
     if (error instanceof Error) {
-      logError('Daily fetch error:', error.message, error.name);
-      
-      if (error.name === 'AbortError') {
-        return {
-          ticker,
-          error: 'Request timed out. Please check your connection and try again.',
-          provider: MARKET_DATA_CONFIG.provider,
-          errorCode: 'timeout',
-          isRateLimited: false,
-        };
-      }
+      return {
+        ticker,
+        error: `Unexpected error: ${error.message}`,
+        provider: MARKET_DATA_CONFIG.provider,
+        errorCode: 'network_error',
+        isRateLimited: false,
+        rawResponse: `Daily unexpected error in ${env.environment}: ${error.message}`,
+      };
     }
     
-    logError('Daily unknown error:', error);
     return {
       ticker,
       error: 'Failed to fetch daily market data. Please try again.',
       provider: MARKET_DATA_CONFIG.provider,
       errorCode: 'network_error',
       isRateLimited: false,
+      rawResponse: `Daily unknown error in ${env.environment}`,
     };
   }
 }

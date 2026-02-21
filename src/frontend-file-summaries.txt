@@ -1,5 +1,5 @@
 {
-  "frontend/src/App.tsx": "Main application component with tabbed interface, live market data fetching with comprehensive error handling showing specific messages for rate limits, invalid tickers, network issues, timeouts, and API errors, plus optional diagnostic panel when ?debug=market-data is appended to URL.",
+  "frontend/src/App.tsx": "Main application component with enhanced error display showing specific error types, troubleshooting tips, technical details in debug mode, and environment-aware error messages, now with corrected DisclaimerGate props.",
   "frontend/src/hooks/useQueries.ts": "Empty placeholder file for organizing React Query hooks (actual hooks are in feature-specific files).",
   "frontend/src/hooks/useUserProfile.ts": "React Query hooks for fetching and saving user profiles with proper actor dependency handling to prevent modal flash.",
   "frontend/src/hooks/useTradeAnalysis.ts": "React Query mutation hook for analyzing trades via backend with automatic history invalidation on success.",
@@ -17,13 +17,13 @@
   "frontend/src/components/history/HistoryDetail.tsx": "Detailed view of a single saved trade analysis showing all inputs, results, and calculated profit/loss values.",
   "frontend/src/index.css": "Global styles with dark trading-themed OKLCH color system optimized for financial data visualization.",
   "frontend/tailwind.config.js": "Tailwind configuration with custom color tokens, Inter/JetBrains Mono fonts, and extended theme for trading tool aesthetic.",
-  "frontend/src/lib/marketData/config.ts": "Market data provider configuration with API key validation function to check presence and format before making requests.",
-  "frontend/src/lib/marketData/types.ts": "TypeScript interfaces for market data structures with extended error types including timeout, no_data, config_error, and api_error, plus optional rawResponse field for debugging.",
-  "frontend/src/lib/marketData/fetchMarketData.ts": "Market data fetch helper with comprehensive logging, timeout handling via AbortController, API key validation, and detailed error detection for rate limits, timeouts, network errors, and missing data.",
+  "frontend/src/lib/marketData/config.ts": "Market data provider configuration for Yahoo Finance with base URL and rate limit constants, no API key required.",
+  "frontend/src/lib/marketData/types.ts": "TypeScript interfaces for market data structures with extended error codes including cors_error and parse_error for comprehensive error categorization.",
+  "frontend/src/lib/marketData/fetchMarketData.ts": "Market data fetch helper with comprehensive error logging including HTTP status, response body, network exceptions, CORS detection, environment context, and a test helper function for console debugging.",
   "frontend/src/lib/marketData/deriveTradeInputs.ts": "Utility function that computes suggested entry/stop/take-profit levels from fetched market data and technical indicators using support/resistance.",
-  "frontend/src/hooks/useMarketData.ts": "React hook managing market data fetch state with cooldown timers, automatic retry scheduling with proper attempt tracking, 2-minute total timeout protection, and diagnostic data exposure in debug mode.",
-  "frontend/src/lib/marketData/marketDataPolicy.ts": "Centralized policy constants for market data fetching including cache TTL, request spacing, exponential backoff parameters, and helper functions for ticker normalization and backoff delay calculation.",
-  "frontend/src/lib/marketData/marketDataClient.ts": "Client-side wrapper with TTL caching, request de-duplication, spacing enforcement, exponential backoff retry logic that correctly tracks attempt counts and prevents infinite loops, and diagnostic data tracking.",
+  "frontend/src/hooks/useMarketData.ts": "React hook managing market data fetch state with cooldown timers, automatic retry scheduling, and diagnostic data exposure, now properly handling detailed error messages.",
+  "frontend/src/lib/marketData/marketDataPolicy.ts": "Centralized policy constants for market data fetching with reduced backoff delays and request intervals optimized for Yahoo Finance's more generous rate limits.",
+  "frontend/src/lib/marketData/marketDataClient.ts": "Client-side wrapper with TTL caching, request de-duplication, spacing enforcement, and exponential backoff retry logic with diagnostic tracking for Yahoo Finance integration.",
   "frontend/src/lib/urlParams.ts": "URL parameter utilities for reading query strings and checking for debug flags.",
-  "frontend/src/components/DiagnosticPanel.tsx": "Collapsible diagnostic panel component displaying request details, response status, cache statistics, and retry history in a developer-friendly format when debug mode is enabled."
+  "frontend/src/components/DiagnosticPanel.tsx": "Collapsible diagnostic panel displaying environment information, request/response details, cache statistics, and retry history for comprehensive debugging."
 }

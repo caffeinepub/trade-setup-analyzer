@@ -1,54 +1,100 @@
 {
   "kind": "implementation_plan",
   "version": "1.0",
-  "title": "Fix infinite rate-limit retry loop",
+  "title": "Fix Yahoo Finance market data fetching failure",
   "requirements": [
     {
-      "id": "REQ-21",
-      "summary": "Fix the rate-limit retry loop in useMarketData.ts to correctly display exponential backoff delays and stop after maximum retries instead of looping infinitely",
+      "id": "REQ-30",
+      "summary": "Add comprehensive error logging to fetchMarketData.ts to capture HTTP status, headers, response body, parsed errors, and network exceptions at the exact failure point",
       "acceptanceCriteria": [
-        "The retry message updates with increasing delays (10s, 30s, 60s) instead of always showing '1s'",
-        "After 3 failed attempts, the retry loop stops and shows a final error state",
-        "The cooldown timer in the UI reflects the actual backoff delay from the policy",
-        "No infinite retry loops occur when rate limits are hit"
+        "Console logs show the exact HTTP status code and response body when the fetch fails",
+        "Error logs distinguish between network failures, HTTP errors, and parsing failures",
+        "Logs are written at debug level and do not expose sensitive data"
+      ],
+      "file_operations": [
+        {
+          "path": "frontend/src/lib/marketData/fetchMarketData.ts",
+          "operation": "modify",
+          "description": "Add detailed console logging throughout the fetch flow: log the constructed URL before the request, log the raw Response object including status/statusText/headers after the fetch completes, log the raw response text before JSON parsing, wrap JSON.parse in try-catch to log parsing failures separately, and log specific error types (network vs HTTP vs parsing) with contextual details. Use console.debug for successful requests and console.error for failures. Ensure no API keys or sensitive tokens are logged."
+        }
+      ]
+    },
+    {
+      "id": "REQ-31",
+      "summary": "Verify and correct the Yahoo Finance API endpoint URL construction in fetchMarketData.ts, ensuring proper formatting, symbol encoding, and all required query parameters",
+      "acceptanceCriteria": [
+        "The constructed URL matches Yahoo Finance's documented chart API format",
+        "Ticker symbols are properly URL-encoded",
+        "All required query parameters are present with valid values"
+      ],
+      "file_operations": [
+        {
+          "path": "frontend/src/lib/marketData/fetchMarketData.ts",
+          "operation": "modify",
+          "description": "Review and validate the URL construction logic: ensure ticker symbols are URL-encoded using encodeURIComponent, verify all required query parameters (interval, range, period1, period2, etc.) match Yahoo Finance's chart API specification, add validation that the base URL and path are correct, and log the final constructed URL before making the request for debugging purposes. Compare against known working Yahoo Finance chart API examples."
+        }
+      ]
+    },
+    {
+      "id": "REQ-32",
+      "summary": "Add CORS and network connectivity error handling to fetchMarketData.ts with specific error messages for common failure modes: CORS blocks, timeouts, DNS failures, and SSL errors",
+      "acceptanceCriteria": [
+        "CORS errors display a user-friendly message explaining the browser policy block",
+        "Network timeout errors suggest checking connectivity",
+        "Each error type returns a distinct MarketDataError code"
+      ],
+      "file_operations": [
+        {
+          "path": "frontend/src/lib/marketData/fetchMarketData.ts",
+          "operation": "modify",
+          "description": "Enhance error handling to detect and categorize specific failure types: catch fetch exceptions and inspect error.name and error.message to identify TypeError (CORS/network failures), AbortError (timeouts), and other network-level errors. For CORS failures, return a MarketDataError with code 'network_error' and message explaining browser CORS policy blocks external API access. For timeout errors, suggest checking network connectivity. Add checks for response.ok and handle HTTP error status codes (4xx, 5xx) with distinct error messages. Ensure each failure path returns a properly typed MarketDataError from types.ts."
+        },
+        {
+          "path": "frontend/src/lib/marketData/types.ts",
+          "operation": "modify",
+          "description": "Review existing MarketDataError codes and add any missing codes needed for comprehensive error categorization: ensure 'network_error', 'cors_error', 'timeout_error', 'http_error', and 'parse_error' codes are defined if not already present. Add JSDoc comments explaining when each error code should be used."
+        }
+      ]
+    },
+    {
+      "id": "REQ-33",
+      "summary": "Update useMarketData.ts to display raw error messages from fetch operations in the UI, replacing generic 'fail to fetch data' with specific failure reasons",
+      "acceptanceCriteria": [
+        "The error display in App.tsx shows the complete error message from useMarketData",
+        "Error text includes technical details when in diagnostic mode",
+        "Generic 'fail to fetch data' messages are replaced with specific error descriptions"
       ],
       "file_operations": [
         {
           "path": "frontend/src/hooks/useMarketData.ts",
           "operation": "modify",
-          "description": "Fix retry state management to properly track attempt counts and display correct backoff delays. Update the cooldownRemaining calculation to use the actual backoff delay from the policy instead of a hardcoded 1-second value. Ensure the retry loop terminates after maxRetries (3) is reached by checking the attempt count before scheduling the next retry. Add logic to transition to a final error state when retries are exhausted, preventing infinite loops."
+          "description": "Update error state management to preserve and expose the complete error message and code from MarketDataError. Ensure the hook's error object includes both a user-friendly message and technical details. When marketDataClient returns an error, capture the full error object (code, message, details) and make it available to consuming components. Add a diagnostic mode flag or check that includes additional technical details in the error output when enabled."
+        },
+        {
+          "path": "frontend/src/App.tsx",
+          "operation": "modify",
+          "description": "Update the error display section to show the detailed error message from useMarketData instead of generic text. If marketData.error exists, display error.message prominently, and conditionally display error.code and any additional diagnostic details when in debug mode. Ensure the error UI is user-friendly while providing actionable information. Replace any hardcoded 'fail to fetch data' strings with the dynamic error message from the hook."
         }
       ]
     },
     {
-      "id": "REQ-22",
-      "summary": "Update retry state management in marketDataClient.ts to correctly track and increment attempt counts, ensuring backoff delays are calculated from the actual attempt number",
+      "id": "REQ-34",
+      "summary": "Test Yahoo Finance integration with valid tickers (AAPL, MSFT, TSLA) in browser console and production to verify successful fetching and identify environment-specific issues",
       "acceptanceCriteria": [
-        "The retry attempt counter increments correctly (0, 1, 2, 3)",
-        "Each retry uses the backoff delay corresponding to its attempt number",
-        "Diagnostic data shows accurate retry history with correct attempt numbers and delays"
+        "Market data successfully loads for valid tickers in development environment",
+        "Market data successfully loads for valid tickers in deployed canister environment",
+        "Error messages clearly indicate whether the failure is environment-specific"
       ],
       "file_operations": [
         {
-          "path": "frontend/src/lib/marketData/marketDataClient.ts",
+          "path": "frontend/src/lib/marketData/fetchMarketData.ts",
           "operation": "modify",
-          "description": "Fix the retry logic in fetchWithRetry to properly track and increment the currentAttempt counter across retry cycles. Ensure the backoff delay calculation in the retry loop uses the incremented attempt number (currentAttempt + 1) rather than currentAttempt, so that the first retry uses delay[0], second uses delay[1], etc. Update diagnostic tracking to record accurate attempt numbers and corresponding delays in the retry history."
-        }
-      ]
-    },
-    {
-      "id": "REQ-23",
-      "summary": "Add timeout logic to useMarketData.ts to gracefully exit the retry loop if total duration exceeds 2 minutes, displaying a clear error message",
-      "acceptanceCriteria": [
-        "If retries continue beyond 2 minutes total, the loop terminates",
-        "A clear error message is shown: 'Rate limit retries exhausted. Please try again later.'",
-        "The user can manually trigger a new fetch attempt after the timeout"
-      ],
-      "file_operations": [
+          "description": "Add environment detection logging that identifies whether the app is running in development (localhost) or production (deployed canister). Log the environment context at the start of each fetch attempt. Include the current origin/hostname in error messages to help diagnose environment-specific CORS or network issues. Add a test helper function (exported for console testing) that accepts a ticker symbol and performs a standalone fetch with full diagnostic output, making it easy to test AAPL, MSFT, TSLA directly from the browser console."
+        },
         {
-          "path": "frontend/src/hooks/useMarketData.ts",
+          "path": "frontend/src/components/DiagnosticPanel.tsx",
           "operation": "modify",
-          "description": "Add a maximum total duration check (2 minutes) to the retry loop. Track the elapsed time from the initial fetch attempt and terminate the retry loop if the total duration exceeds 120 seconds. When the timeout is reached, set the error state to 'Rate limit retries exhausted. Please try again later.' and reset the fetching state to allow the user to manually trigger a new fetch attempt."
+          "description": "Enhance the diagnostic panel to display environment information (development vs production, current origin) alongside existing request/response details. Add a section showing the last tested ticker symbols and their success/failure status. If market data fetching fails, display whether the failure appears to be environment-specific based on error patterns (e.g., CORS errors more common in production)."
         }
       ]
     }

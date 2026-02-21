@@ -21,7 +21,17 @@ export interface MarketDataResult {
   error?: string;
 }
 
-export type MarketDataErrorCode = 'rate_limit' | 'invalid_ticker' | 'network_error' | 'timeout' | 'no_data' | 'api_error' | 'config_error' | 'unknown';
+export type MarketDataErrorCode = 
+  | 'rate_limit' 
+  | 'invalid_ticker' 
+  | 'network_error' 
+  | 'cors_error'
+  | 'timeout' 
+  | 'no_data' 
+  | 'api_error' 
+  | 'config_error' 
+  | 'parse_error'
+  | 'unknown';
 
 export interface MarketDataError {
   ticker: string;

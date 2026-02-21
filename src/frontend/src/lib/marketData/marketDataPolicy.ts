@@ -7,12 +7,12 @@
 export const CACHE_TTL_MS = 60_000; // 60 seconds
 
 // Request spacing: Minimum time between actual network calls per ticker
-export const MIN_REQUEST_INTERVAL_MS = 5_000; // 5 seconds
+export const MIN_REQUEST_INTERVAL_MS = 2_000; // 2 seconds (Yahoo Finance is more lenient)
 
 // Exponential backoff policy for rate-limit retries
 export const MAX_RETRIES = 3;
-export const BASE_DELAY_MS = 10_000; // 10 seconds
-export const MAX_DELAY_MS = 60_000; // 60 seconds
+export const BASE_DELAY_MS = 5_000; // 5 seconds (reduced from 10s)
+export const MAX_DELAY_MS = 30_000; // 30 seconds (reduced from 60s)
 
 /**
  * Normalize ticker symbol for consistent cache/spacing keys

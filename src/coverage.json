@@ -1,46 +1,74 @@
 {
   "kind": "coverage_report",
   "version": "1.0",
-  "generatedAt": "2026-02-20T23:25:56.827Z",
+  "generatedAt": "2026-02-21T00:07:20.890Z",
   "sources": {
     "buildRequest": true,
     "implementationPlan": true
   },
   "requirements": {
-    "total": 3,
-    "implemented": 3,
+    "total": 5,
+    "implemented": 5,
     "items": [
       {
-        "id": "REQ-21",
-        "summary": "Fix the rate-limit retry loop in frontend/src/hooks/useMarketData.ts so it stops repeating the same 'rate limit reached, retrying in 1s...' message indefinitely. Ensure the retry logic respects the exponential backoff schedule (10s, 30s, 60s) and stops after reaching the maximum retry attempts (3) instead of looping forever.",
+        "id": "REQ-30",
+        "summary": "Investigate and fix the 'fail to fetch data' error in the Yahoo Finance integration by adding comprehensive error logging to frontend/src/lib/marketData/fetchMarketData.ts to capture the exact failure point: HTTP response status, response headers, raw response body, parsed error messages, and network exceptions.",
         "status": "implemented",
         "plannedFiles": [
-          "frontend/src/hooks/useMarketData.ts"
+          "frontend/src/lib/marketData/fetchMarketData.ts"
         ],
         "matchedFiles": [
-          "frontend/src/hooks/useMarketData.ts"
+          "frontend/src/lib/marketData/fetchMarketData.ts"
         ]
       },
       {
-        "id": "REQ-22",
-        "summary": "Update the retry state management in frontend/src/lib/marketData/marketDataClient.ts to correctly track and increment the current attempt count across retries, and ensure the backoff delay calculation uses the actual attempt number rather than a fixed value.",
+        "id": "REQ-31",
+        "summary": "Verify that the Yahoo Finance API endpoint URL constructed in frontend/src/lib/marketData/fetchMarketData.ts is correctly formatted and matches Yahoo Finance's expected chart API format, including all required query parameters (interval, range, symbol encoding).",
         "status": "implemented",
         "plannedFiles": [
-          "frontend/src/lib/marketData/marketDataClient.ts"
+          "frontend/src/lib/marketData/fetchMarketData.ts"
         ],
         "matchedFiles": [
-          "frontend/src/lib/marketData/marketDataClient.ts"
+          "frontend/src/lib/marketData/fetchMarketData.ts"
         ]
       },
       {
-        "id": "REQ-23",
-        "summary": "Add timeout logic to frontend/src/hooks/useMarketData.ts so that if the retry loop exceeds a maximum total duration (e.g., 2 minutes), it exits gracefully with a clear error message indicating that retries have been exhausted.",
+        "id": "REQ-32",
+        "summary": "Add CORS and network connectivity error handling to frontend/src/lib/marketData/fetchMarketData.ts to detect and provide specific error messages for common failure modes: CORS policy blocks, network timeouts, DNS resolution failures, and SSL/TLS errors.",
         "status": "implemented",
         "plannedFiles": [
-          "frontend/src/hooks/useMarketData.ts"
+          "frontend/src/lib/marketData/fetchMarketData.ts",
+          "frontend/src/lib/marketData/types.ts"
         ],
         "matchedFiles": [
-          "frontend/src/hooks/useMarketData.ts"
+          "frontend/src/lib/marketData/fetchMarketData.ts",
+          "frontend/src/lib/marketData/types.ts"
+        ]
+      },
+      {
+        "id": "REQ-33",
+        "summary": "Update frontend/src/hooks/useMarketData.ts to display the raw error message from the fetch operation when market data fails, so users and developers can see the exact failure reason in the UI.",
+        "status": "implemented",
+        "plannedFiles": [
+          "frontend/src/hooks/useMarketData.ts",
+          "frontend/src/App.tsx"
+        ],
+        "matchedFiles": [
+          "frontend/src/hooks/useMarketData.ts",
+          "frontend/src/App.tsx"
+        ]
+      },
+      {
+        "id": "REQ-34",
+        "summary": "Test the Yahoo Finance integration with valid ticker symbols (AAPL, MSFT, TSLA) in both browser console and production environment to verify successful data fetching and identify any environment-specific issues (localhost vs. deployed canister).",
+        "status": "implemented",
+        "plannedFiles": [
+          "frontend/src/lib/marketData/fetchMarketData.ts",
+          "frontend/src/components/DiagnosticPanel.tsx"
+        ],
+        "matchedFiles": [
+          "frontend/src/lib/marketData/fetchMarketData.ts",
+          "frontend/src/components/DiagnosticPanel.tsx"
         ]
       }
     ]
@@ -50,8 +78,11 @@
     "feature_evidence.json",
     "frontend-file-summaries.txt",
     "frontend-implementation-plan.json",
+    "frontend/src/App.tsx",
+    "frontend/src/components/DiagnosticPanel.tsx",
     "frontend/src/hooks/useMarketData.ts",
-    "frontend/src/lib/marketData/marketDataClient.ts",
+    "frontend/src/lib/marketData/fetchMarketData.ts",
+    "frontend/src/lib/marketData/types.ts",
     "project_state.json",
     "scratch/component-selection.json",
     "spec.md",

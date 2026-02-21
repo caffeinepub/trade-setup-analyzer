@@ -4,43 +4,20 @@
  */
 
 export const MARKET_DATA_CONFIG = {
-  // Alpha Vantage free API - provides real-time and historical stock data
-  // Free tier: 25 requests/day, 5 requests/minute
-  baseUrl: 'https://www.alphavantage.co/query',
-  provider: 'Alpha Vantage',
-  // Demo API key - users should replace with their own from https://www.alphavantage.co/support/#api-key
-  apiKey: 'demo',
+  // Yahoo Finance query API - provides real-time and historical stock data
+  // No API key required, more generous rate limits than Alpha Vantage
+  baseUrl: 'https://query1.finance.yahoo.com',
+  provider: 'Yahoo Finance',
+  // No API key needed for Yahoo Finance
   rateLimit: {
-    requestsPerMinute: 5,
-    requestsPerDay: 25,
+    // Yahoo Finance is more lenient with rate limits
+    requestsPerMinute: 60,
+    requestsPerDay: 2000,
   },
 } as const;
 
 export const MARKET_DATA_NOTES = {
-  freeApiLimitations: 'Free API tier has rate limits. For production use, obtain your own API key from Alpha Vantage.',
-  dataDelay: 'Data may be delayed by 15 minutes for free tier users.',
-  supportedMarkets: 'Primarily US stock markets (NYSE, NASDAQ). Limited international coverage.',
+  freeApiLimitations: 'Yahoo Finance API is free to use but intended for personal use only.',
+  dataDelay: 'Data is typically real-time or with minimal delay.',
+  supportedMarkets: 'Global stock markets including US (NYSE, NASDAQ), international exchanges, and major indices.',
 };
-
-/**
- * Validate API key presence and format
- */
-export function validateApiKey(): { valid: boolean; error?: string } {
-  const key = MARKET_DATA_CONFIG.apiKey;
-  
-  if (!key || key.trim() === '') {
-    return {
-      valid: false,
-      error: 'API key is missing. Please configure MARKET_DATA_API_KEY.',
-    };
-  }
-  
-  if (key.length < 3) {
-    return {
-      valid: false,
-      error: 'API key appears to be invalid (too short).',
-    };
-  }
-  
-  return { valid: true };
-}
